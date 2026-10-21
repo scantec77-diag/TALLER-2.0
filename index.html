@@ -1,6 +1,7 @@
 <!doctype html>
 <html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Taller 2.0</title><meta name="theme-color" content="#142337">
-<style>:root{font-family:system-ui,Arial;color:#edf3fa;background:#0d1726}*{box-sizing:border-box}body{margin:0}header{background:#142337;padding:20px;border-bottom:1px solid #304258}main{max-width:900px;margin:auto;padding:22px}h1{margin:0}p{color:#b7c6d7}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}.card{display:flex;align-items:center;gap:9px;background:linear-gradient(110deg,#263d56,#17283d);color:white;border:1px solid #405c7a;border-radius:9px;padding:9px 10px;height:62px;min-height:0;aspect-ratio:auto;text-align:left;cursor:pointer;font-size:.85rem;font-weight:650;overflow-wrap:anywhere;box-shadow:0 2px 8px #0002;transition:transform .15s,border-color .15s}.card:active{transform:scale(.97)}.card:hover{border-color:#75b7ed}.icon{font-size:1.4rem;display:flex;align-items:center;justify-content:center;flex:0 0 30px;margin:0}@media(max-width:420px){main{padding:14px}.grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.card{height:58px;padding:7px 8px;font-size:.79rem;gap:6px}.icon{font-size:1.25rem;flex-basis:25px}}button,input{font:inherit}.back,.settings{background:#294563;color:white;border:0;border-radius:9px;padding:10px 14px;margin:8px 8px 8px 0}input{width:100%;padding:12px;border-radius:8px;border:1px solid #526a84;background:#122237;color:white}label{display:block;margin:12px 0}small{color:#b7c6d7}a{color:#a8d6ff} .google-login{display:inline-flex;align-items:center;justify-content:center;gap:10px;background:#fff;color:#202124;border:1px solid #dadce0;border-radius:9px;padding:12px 18px;font-weight:650;cursor:pointer;min-height:46px}.google-login:hover{background:#f2f6fc}.google-login:disabled{opacity:.7;cursor:wait}.google-mark{font-size:1.25rem;font-weight:800;color:#4285f4}</style></head><body><header><h1>🔧 Taller 2.0</h1><p>Biblioteca de máquinas y documentación técnica</p></header><main><div id="view"></div></main>
+<style>:root{font-family:system-ui,Arial;color:#edf3fa;background:#0d1726}*{box-sizing:border-box}body{margin:0}header{background:#142337;padding:20px;border-bottom:1px solid #304258}main{max-width:900px;margin:auto;padding:22px}h1{margin:0}p{color:#b7c6d7}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}.card{display:flex;align-items:center;gap:9px;background:linear-gradient(110deg,#263d56,#17283d);color:white;border:1px solid #405c7a;border-radius:9px;padding:9px 10px;height:62px;min-height:0;aspect-ratio:auto;text-align:left;cursor:pointer;font-size:.85rem;font-weight:650;overflow-wrap:anywhere;box-shadow:0 2px 8px #0002;transition:transform .15s,border-color .15s}.card:active{transform:scale(.97)}.card:hover{border-color:#75b7ed}.icon{font-size:1.4rem;display:flex;align-items:center;justify-content:center;flex:0 0 30px;margin:0}@media(max-width:420px){main{padding:14px}.grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.card{height:58px;padding:7px 8px;font-size:.79rem;gap:6px}.icon{font-size:1.25rem;flex-basis:25px}}button,input{font:inherit}.back,.settings{background:#294563;color:white;border:0;border-radius:9px;padding:10px 14px;margin:8px 8px 8px 0}input{width:100%;padding:12px;border-radius:8px;border:1px solid #526a84;background:#122237;color:white}label{display:block;margin:12px 0}small{color:#b7c6d7}a{color:#a8d6ff} .google-login{display:inline-flex;align-items:center;justify-content:center;gap:10px;background:#fff;color:#202124;border:1px solid #dadce0;border-radius:9px;padding:12px 18px;font-weight:650;cursor:pointer;min-height:46px}.google-login:hover{background:#f2f6fc}.google-login:disabled{opacity:.7;cursor:wait}.google-mark{font-size:1.25rem;font-weight:800;color:#4285f4}.account-row{display:flex;align-items:stretch;gap:8px;max-width:530px;margin:8px 0 12px}.account-row input{flex:1;min-width:0;letter-spacing:2px}.reconnect-icon{min-width:54px;border:1px solid #6a94bb;background:#294563;color:white;border-radius:9px;font-size:1.8rem;cursor:pointer;display:flex;align-items:center;justify-content:center}.reconnect-icon:hover{background:#365c80}.reconnect-icon:disabled{opacity:.5;cursor:wait}.connection-hint{font-size:.88rem;color:#b7c6d7}.connection-state{min-height:24px;color:#cee5fa}
+</style></head><body><header><h1>🔧 Taller 2.0</h1><p>Biblioteca de máquinas y documentación técnica</p></header><main><div id="view"></div></main>
 <script type="module">
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js';
 import { getAuth, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, linkWithPopup, reauthenticateWithPopup, signOut } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js';
@@ -85,7 +86,13 @@ onAuthStateChanged(auth,async user=>{
 const KEY="taller20_config_v1";let config=JSON.parse(localStorage.getItem(KEY)||'{"root":"11cVCcyrGyjp17oqkjZ5uS93PqstprZ9Y","machines":[]}');if(!config.root)config.root="11cVCcyrGyjp17oqkjZ5uS93PqstprZ9Y";const DRIVE_MACHINES=[{"name":"CONTAINERAS VIEJAS","folder":"1a_L4HR_McfGmnCuTXbgrZlf0xvSuxGPW"},{"name":"GOVERNOR","folder":"1k-WM5uNZb88MNCpKsS7rRffqXoi-8ar1"},{"name":"HYSTER","folder":"1FOgvdSfJZ9AlsTml2I1yU0ROJhcKXSCI"},{"name":"INFO","folder":"1VeBO1uH2mimy2PEJ07gCOpLQY0t2xGg_"},{"name":"INTA","folder":"1iYlZDsIFLqoTXFmrjkkj7StDnnzHhjLJ"},{"name":"KALMAR","folder":"1yZrf4vj5ZHLFkCZjklJ7ly0t38FVNKCK"},{"name":"KONECRANES","folder":"1Js5uk-b2RtAfM18PWFg6qZ4U8Rpb6ob5"},{"name":"LIEBHERR","folder":"1kBoSAqAeIpI3UtHOWWGN8t82cGAZYu-o"},{"name":"LINDE","folder":"17MpMCCTBXCTsANG_UkbEqTZR5pnhPAKf"},{"name":"masterdrive","folder":"1UXMehucxz8AcqfUweE6is2JrBXJNHNxT"},{"name":"noel","folder":"1SUGcDxSE3rIjPaL-p_f7PVC_EsuMFqVe"},{"name":"P02","folder":"1ypQvrsJTftXJE2vUytiSSeISsZ1wsum3"},{"name":"P03","folder":"1_SvG_J2lHT51yYcvT7jWaC4-7yDiEDC_"},{"name":"P04","folder":"1UvnD1-CKrpfxIxJOtvLcNWXj-YXYq39K"},{"name":"P05","folder":"1rIW1383BZGvr3mPVHZjk0vI0qKjud3cg"},{"name":"P06","folder":"1HpC1AdxIOsrNlmQXtzWlJU2U2fG3y14G"},{"name":"P07","folder":"1LAz3z1gHZ90t4VTe9mv4n4vGdGxVGSQD"},{"name":"P08","folder":"1Bq3vlwACX7VVDtstffS6wVwTRvrSzFPj"},{"name":"P09","folder":"1MvUKcXfyEIZR06CCLIIYZWyo7Bz63gKi"},{"name":"P10","folder":"1BM7t2Zha9B0nwYgnYQleO2JV2vrBN1PP"},{"name":"PACECO","folder":"1AX5tDnkEXyZyzhW4IwLhSxOn7n_oRTpT"},{"name":"S7","folder":"1zIMmDXgjZV-R-TUQwFzsqmTM9zNEIPfw"},{"name":"SISU","folder":"1DMljuYrC-amjtpbqaLIaEgKtMV7qd8Yz"}];for(const m of DRIVE_MACHINES){if(!config.machines.some(x=>x.folder===m.folder))config.machines.push(m)}localStorage.setItem(KEY,JSON.stringify(config));const view=document.getElementById('view');
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 function folderId(value){const m=String(value).match(/\/folders\/([\w-]+)/);return m?m[1]:String(value).trim()}function folderUrl(id){const url='https://drive.google.com/drive/folders/'+encodeURIComponent(id);const email=driveOwnerEmail||activeUser?.email;return email?url+'?authuser='+encodeURIComponent(email):url}
-const NOTES_KEY="taller20_notas_v1";async function notes(){if(!activeUser)return;const noteRef=doc(db,'users',activeUser.uid,'notes','personal');let value='';try{const snap=await getDoc(noteRef);value=snap.exists()?snap.data().content||'':''}catch(e){alert('No se pudieron cargar tus notas');return}view.innerHTML='<button class="back" onclick="home()">← Volver</button><h2>📝 Mi espacio</h2><p>Tu bloc de notas personal. Se guarda en tu cuenta privada.</p><textarea id="myNotes" placeholder="Anotá tareas, observaciones, recordatorios..." style="width:100%;min-height:320px;resize:vertical;padding:14px;border-radius:10px;background:#122237;color:white;border:1px solid #526a84;font:inherit"></textarea><p id="noteStatus">Los cambios se guardan automáticamente.</p>';const el=document.getElementById("myNotes");el.value=value;el.addEventListener("input",()=>{clearTimeout(window.noteTimer);window.noteTimer=setTimeout(async()=>{try{await setDoc(noteRef,{content:el.value,updatedAt:new Date().toISOString()});document.getElementById("noteStatus").textContent="Guardado en tu espacio privado ✓"}catch(e){document.getElementById("noteStatus").textContent="Error al guardar; revisá tu conexión"}},650)})}function home(){if(!activeUser)return;view.innerHTML='<button class="settings" onclick="notes()">📝 Mi espacio</button>'+(isAdmin?'<button class="settings" onclick="settings()">⚙️ Configuración</button>':'')+(driveOwnerEmail?'<p>📁 Cuenta de archivos asociada: '+esc(driveOwnerEmail)+'</p>':'<p>📁 Al abrir una máquina, elegí la cuenta donde están los archivos.</p>')+'<h2>Máquinas</h2><div class="grid">'+(config.machines.map((m,i)=>'<button class="card" onclick="openMachine('+i+')"><span class="icon">⚙️</span>'+esc(m.name)+'</button>').join('')||'<p>Agregá la primera máquina desde Configuración.</p>')+'</div>'}
+const NOTES_KEY="taller20_notas_v1";async function notes(){if(!activeUser)return;const noteRef=doc(db,'users',activeUser.uid,'notes','personal');let value='';try{const snap=await getDoc(noteRef);value=snap.exists()?snap.data().content||'':''}catch(e){alert('No se pudieron cargar tus notas');return}view.innerHTML='<button class="back" onclick="home()">← Volver</button><h2>📝 Mi espacio</h2><p>Tu bloc de notas personal. Se guarda en tu cuenta privada.</p><textarea id="myNotes" placeholder="Anotá tareas, observaciones, recordatorios..." style="width:100%;min-height:320px;resize:vertical;padding:14px;border-radius:10px;background:#122237;color:white;border:1px solid #526a84;font:inherit"></textarea><p id="noteStatus">Los cambios se guardan automáticamente.</p>';const el=document.getElementById("myNotes");el.value=value;el.addEventListener("input",()=>{clearTimeout(window.noteTimer);window.noteTimer=setTimeout(async()=>{try{await setDoc(noteRef,{content:el.value,updatedAt:new Date().toISOString()});document.getElementById("noteStatus").textContent="Guardado en tu espacio privado ✓"}catch(e){document.getElementById("noteStatus").textContent="Error al guardar; revisá tu conexión"}},650)})}function home(){
+ if(!activeUser)return;
+ view.innerHTML='<button class="settings" onclick="notes()">📝 Mi espacio</button>'+
+  (isAdmin?'<button class="settings" onclick="settings()">⚙️ Configuración</button><button class="settings" onclick="manageConnection()">🔗 Gestionar conexión</button>':'')+
+  '<h2>Máquinas</h2><div class="grid">'+
+  (config.machines.map((m,i)=>'<button class="card" onclick="openMachine('+i+')"><span class="icon">⚙️</span>'+esc(m.name)+'</button>').join('')||'<p>Agregá la primera máquina desde Configuración.</p>')+'</div>';
+}
 function clearPdfPreview(){if(pdfObjectUrl){URL.revokeObjectURL(pdfObjectUrl);pdfObjectUrl=null}}
 function externalDriveLink(id){return '<p><a href="'+folderUrl(id)+'" target="_blank" rel="noopener">Abrir en Google Drive ↗</a></p>'}
 function openMachine(i){
@@ -97,43 +104,65 @@ function openMachine(i){
   driveTrail=[{id:m.folder,name:m.name}];
   browseDriveFolder();
 }
-function connectDriveScreen(forceChange=false){
+function driveAccountField(){
+  const stars=driveOwnerEmail?'••••••••••••':'Sin cuenta asociada';
+  return '<label for="savedDriveEmail">Cuenta de Google Drive asociada</label>'+
+    '<div class="account-row"><input id="savedDriveEmail" type="text" value="'+stars+'" readonly aria-label="Cuenta de archivos '+(driveOwnerEmail?'asociada y oculta':'sin asociar')+'">'+
+    '<button type="button" class="reconnect-icon" id="connectDrive" aria-label="Reconectar cuenta de Drive" title="Reconectar cuenta de Drive">⟳</button></div>';
+}
+async function authorizeDriveAccount(forceChange=false){
+  if(!activeUser||!auth.currentUser||activeUser.uid!==auth.currentUser.uid)throw Error('La sesión de Taller cambió. Volvé a ingresar.');
+  const email=forceChange?'':driveOwnerEmail;
+  driveProvider.setCustomParameters(email?{login_hint:email,prompt:''}:{prompt:'select_account'});
+  const candidate=driveAuth.currentUser;
+  const sameAccount=email&&candidate?.email?.toLowerCase()===email.toLowerCase();
+  const result=sameAccount?await reauthenticateWithPopup(candidate,driveProvider):await signInWithPopup(driveAuth,driveProvider);
+  const selected=result.user?.email;
+  if(!selected)throw Error('Google no informó qué cuenta autorizó el acceso.');
+  if(email&&selected.toLowerCase()!==email.toLowerCase())throw Error('Se eligió una cuenta distinta. Utilizá Cambiar cuenta para vincular otra.');
+  const credential=GoogleAuthProvider.credentialFromResult(result);
+  if(!credential?.accessToken)throw Error('Google no entregó permiso para leer Drive.');
+  driveAccessToken=credential.accessToken;
+  driveTokenExpiry=Date.now()+45*60*1000;
+  await rememberDriveEmail(selected);
+  return selected;
+}
+function bindConnectionButtons(onSuccess){
+  const btn=document.getElementById('connectDrive');
+  const status=document.getElementById('driveStatus');
+  btn.onclick=async()=>{
+    btn.disabled=true;if(status)status.textContent='Conectando con Google...';
+    try{await authorizeDriveAccount(false);onSuccess()}
+    catch(e){if(status)status.textContent=errors[e?.code]||e.message||'No se pudo reconectar';btn.disabled=false}
+  };
+  const change=document.getElementById('changeDrive');
+  if(change)change.onclick=async()=>{
+    change.disabled=true;btn.disabled=true;if(status)status.textContent='Seleccioná la nueva cuenta...';
+    try{await authorizeDriveAccount(true);onSuccess()}
+    catch(e){if(status)status.textContent=errors[e?.code]||e.message||'No se pudo asociar la cuenta';change.disabled=false;btn.disabled=false}
+  };
+}
+function manageConnection(){
+  if(!isAdmin)return home();
+  view.innerHTML='<button type="button" class="back" onclick="home()">← Volver</button>'+
+    '<h2>🔗 Gestionar conexión</h2><p>La cuenta que vinculaste queda guardada. El correo se muestra oculto por privacidad.</p>'+
+    driveAccountField()+
+    '<p class="connection-hint">Tocá ⟳ para reconectar con el correo asociado. Si todavía no vinculaste una cuenta, Google te pedirá elegirla por primera vez.</p>'+
+    '<button type="button" class="settings" id="changeDrive">Cambiar cuenta asociada</button>'+
+    '<p class="connection-state" role="status" id="driveStatus">'+(driveAccessToken&&Date.now()<driveTokenExpiry?'Permiso temporal activo':'Cuenta guardada; permiso de Google pendiente o vencido')+'</p>'+
+    '<small>El correo oculto no reemplaza la autorización de Google ni concede acceso a otras personas.</small>';
+  bindConnectionButtons(()=>{manageConnection();const status=document.getElementById('driveStatus');if(status)status.textContent='Permiso de Drive renovado ✓'});
+}
+function connectDriveScreen(){
   if(!activeUser||currentMachineIndex===null)return home();
   const m=config.machines[currentMachineIndex];if(!m)return home();
-  const linked=!forceChange&&!!driveOwnerEmail;
-  const details=linked
-    ?'<p><strong>Cuenta de manuales asociada: '+esc(driveOwnerEmail)+'</strong></p><p>Esta cuenta queda recordada. Google puede solicitarte renovar periódicamente el permiso de lectura, sin tener que volver a elegir la cuenta.</p>'
-    :'<p>Elegí la cuenta de Google donde están los manuales. Puede ser distinta de la cuenta de Taller 2.0.</p><p>Vamos a recordar esa cuenta para futuros ingresos.</p>';
-  view.innerHTML='<button class="back" onclick="home()">← Volver</button><h2>'+esc(m.name)+'</h2>'+details+
-    '<p>Acceso de solo lectura. No guardamos contraseñas ni tokens de Drive en el almacenamiento permanente.</p>'+
-    '<button class="google-login" id="connectDrive" type="button"><span class="google-mark">G</span>'+(linked?'Renovar acceso a mis archivos':'Asociar cuenta de archivos')+'</button>'+
-    (linked?'<button class="settings" id="changeDrive" type="button">Cambiar cuenta de archivos</button>':'')+
-    '<p id="driveStatus" role="status"></p>'+externalDriveLink(m.folder);
-  if(linked)document.getElementById('changeDrive').onclick=()=>connectDriveScreen(true);
-  document.getElementById('connectDrive').onclick=async()=>{
-    const btn=document.getElementById('connectDrive');btn.disabled=true;
-    try{
-      if(!activeUser||!auth.currentUser||activeUser.uid!==auth.currentUser.uid)throw Error('La sesión de Taller cambió. Volvé a iniciar sesión.');
-      const email=forceChange?'':driveOwnerEmail;
-      driveProvider.setCustomParameters(email?{login_hint:email,prompt:''}:{prompt:'select_account'});
-      const candidate=driveAuth.currentUser;
-      const sameAccount=email&&candidate?.email?.toLowerCase()===email.toLowerCase();
-      const result=sameAccount?await reauthenticateWithPopup(candidate,driveProvider):await signInWithPopup(driveAuth,driveProvider);
-      const selected=result.user?.email;
-      if(!selected)throw Error('Google no informó qué cuenta autorizó el acceso.');
-      if(email&&selected.toLowerCase()!==email.toLowerCase())throw Error('Seleccionaste otra cuenta. Usá "Cambiar cuenta de archivos" para asociar una nueva.');
-      const credential=GoogleAuthProvider.credentialFromResult(result);
-      if(!credential?.accessToken)throw Error('Google no entregó permiso de Drive.');
-      driveAccessToken=credential.accessToken;
-      driveTokenExpiry=Date.now()+45*60*1000;
-      await rememberDriveEmail(selected);
-      browseDriveFolder();
-    }catch(e){
-      const el=document.getElementById('driveStatus');
-      if(el)el.textContent=errors[e?.code]||e.message||'No se pudo conectar Drive.';
-      btn.disabled=false;
-    }
-  };
+  view.innerHTML='<button class="back" onclick="home()">← Volver</button><h2>'+esc(m.name)+'</h2>'+
+    '<p>'+(driveOwnerEmail?'Cuenta de archivos recordada. Tocá ⟳ para renovar el permiso de Google.':'Asociá una vez la cuenta donde están los manuales.')+'</p>'+
+    driveAccountField()+
+    '<p class="connection-hint">Se utiliza únicamente el acceso de lectura que autorices en Google. No guardamos contraseñas.</p>'+
+    '<button type="button" class="settings" id="changeDrive">Cambiar cuenta asociada</button>'+
+    '<p class="connection-state" id="driveStatus" role="status"></p>'+externalDriveLink(m.folder);
+  bindConnectionButtons(()=>browseDriveFolder());
 }
 async function driveRequest(url,options={}){
   if(!driveAccessToken||Date.now()>driveTokenExpiry){driveAccessToken=null;throw Error('AUTH_NEEDED')}
@@ -227,5 +256,5 @@ function renderList(){document.getElementById('machineList').innerHTML=config.ma
 function persist(){localStorage.setItem(KEY,JSON.stringify(config))}function saveRoot(){config.root=folderId(document.getElementById('root').value);persist();home()}
 function addMachine(){const name=document.getElementById('machineName').value.trim(),folder=folderId(document.getElementById('machineFolder').value);if(!name||!folder){alert('Completá nombre y carpeta.');return}config.root=folderId(document.getElementById('root').value);config.machines.push({name,folder});persist();settings()}
 function removeMachine(i){config.machines.splice(i,1);persist();settings()}
-Object.assign(window,{home,notes,openMachine,settings,addMachine,removeMachine,saveRoot});
+Object.assign(window,{home,notes,openMachine,settings,addMachine,removeMachine,saveRoot,manageConnection});
 </script></body></html>
