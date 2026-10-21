@@ -89,14 +89,27 @@ const NOTES_KEY="taller20_notas_v1";async function notes(){if(!activeUser)return
 }
 function clearPdfPreview(){if(pdfObjectUrl){URL.revokeObjectURL(pdfObjectUrl);pdfObjectUrl=null}}
 function externalDriveLink(id){return '<p><a href="'+folderUrl(id)+'" target="_blank" rel="noopener">Abrir en Google Drive ↗</a></p>'}
-function openMachine(i){
+async function openMachine(i){
   if(!activeUser)return;
   clearPdfPreview();
   currentMachineIndex=i;
   const m=config.machines[i];
   if(!m)return home();
   driveTrail=[{id:m.folder,name:m.name}];
-  browseDriveFolder();
+  // Con permiso activo, entra directamente al contenido sin abrir otra página.
+  if(driveAccessToken&&Date.now()<driveTokenExpiry)return browseDriveFolder();
+  // Si el permiso se venció, se intenta renovarlo desde el mismo toque del usuario.
+  view.innerHTML='<button type="button" class="back" onclick="home()">← Volver</button><h2>📁 '+esc(m.name)+'</h2><p id="driveStatus" role="status">Conectando con los manuales...</p>';
+  try{
+    await authorizeDriveAccount();
+    if(currentMachineIndex!==i)return;
+    browseDriveFolder();
+  }catch(e){
+    if(currentMachineIndex!==i)return;
+    connectDriveScreen();
+    const status=document.getElementById('driveStatus');
+    if(status)status.textContent=errors[e?.code]||e.message||'No se pudo renovar el permiso de Google.';
+  }
 }
 
 function driveAccountField(){
@@ -213,7 +226,7 @@ async function browseDriveFolder(pageToken=''){
   }catch(e){
     if(e.message==='AUTH_NEEDED')return connectDriveScreen();
     const status=document.getElementById('driveStatus');
-    if(status)status.textContent='No se pudo leer esta carpeta: '+e.message+'. Podés abrirla desde Drive.';
+    if(status)status.textContent='No se pudo leer esta carpeta: '+e.message+'. Volvé a la máquina y reconectá con ⟳ si el permiso venció.';
     else{view.innerHTML=folderHeader()+'<h2>'+esc(current.name)+'</h2><p role="alert">No se pudo abrir la carpeta: '+esc(e.message)+'</p><p>Si la autorización venció, volvé a la máquina y tocá ⟳.</p>';bindTrailButtons()}
   }
 }
