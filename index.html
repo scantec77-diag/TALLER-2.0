@@ -23,4 +23,5 @@ function renderList(){document.getElementById('machineList').innerHTML=config.ma
 function persist(){localStorage.setItem(KEY,JSON.stringify(config))}function saveRoot(){config.root=folderId(document.getElementById('root').value);persist();home()}
 function addMachine(){const name=document.getElementById('machineName').value.trim(),folder=folderId(document.getElementById('machineFolder').value);if(!name||!folder){alert('Completá nombre y carpeta.');return}config.root=folderId(document.getElementById('root').value);config.machines.push({name,folder});persist();settings()}
 function removeMachine(i){config.machines.splice(i,1);persist();settings()}
+Object.assign(window,{home,notes,openMachine,settings,addMachine,removeMachine,saveRoot});
 </script></body></html>
