@@ -18,6 +18,7 @@ const errors={
   'auth/popup-closed-by-user':'Se canceló el ingreso. Podés volver a intentarlo.',
   'auth/cancelled-popup-request':'Ya hay una ventana de ingreso abierta.',
   'auth/account-exists-with-different-credential':'Esta dirección ya tiene una cuenta con otro método de ingreso. Para conservar sus datos hay que vincularla con Google.',
+  'auth/user-mismatch':'Seleccionaste una cuenta distinta de la que usás en Taller 2.0. Volvé a intentar con la misma cuenta de Google.',
   'auth/network-request-failed':'No hay conexión con Firebase. Revisá Internet e intentá nuevamente.'
 };
 function message(e){const el=document.getElementById('authMessage');if(el)el.textContent=errors[e?.code]||e?.message||String(e)}
@@ -79,17 +80,21 @@ function openMachine(i){
 }
 function connectDriveScreen(){
   const m=config.machines[currentMachineIndex];
-  view.innerHTML='<button class="back" onclick="home()">← Volver</button><h2>'+esc(m.name)+'</h2><p>Para ver carpetas y manuales dentro de Taller 2.0, autorizá el acceso de solo lectura a Google Drive. No volveremos a pedirte que elijas una cuenta al entrar en cada subcarpeta; puede ser necesario renovar el permiso al iniciar otra sesión.</p><p>Los documentos siguen protegidos por los permisos de Drive. Taller 2.0 no puede modificarlos.</p><button class="google-login" id="connectDrive" type="button"><span class="google-mark">G</span>Conectar Google Drive</button><p id="driveStatus" role="status"></p>'+externalDriveLink(m.folder);
+  view.innerHTML='<button class="back" onclick="home()">← Volver</button><h2>'+esc(m.name)+'</h2><p><strong>Cuenta para Drive: '+esc(activeUser.email||'tu cuenta de Google')+'</strong></p><p>Para ver carpetas y manuales dentro de Taller 2.0, autorizá el acceso de solo lectura a Google Drive. No volveremos a pedirte que elijas una cuenta al entrar en cada subcarpeta; puede ser necesario renovar el permiso al iniciar otra sesión.</p><p>Los documentos siguen protegidos por los permisos de Drive. Taller 2.0 no puede modificarlos.</p><button class="google-login" id="connectDrive" type="button"><span class="google-mark">G</span>Conectar Google Drive</button><p id="driveStatus" role="status"></p>'+externalDriveLink(m.folder);
   document.getElementById('connectDrive').onclick=async()=>{
     const btn=document.getElementById('connectDrive');btn.disabled=true;
     try{
-      const result=await reauthenticateWithPopup(auth.currentUser,driveProvider);
+      const user=auth.currentUser;
+      if(!user||!activeUser||user.uid!==activeUser.uid)throw Error('Tu sesión cambió. Volvé al inicio para ingresar con Google.');
+      driveProvider.setCustomParameters({login_hint:user.email||'',include_granted_scopes:'true'});
+      const result=await reauthenticateWithPopup(user,driveProvider);
+      if(result.user.uid!==user.uid)throw Error('La cuenta autorizada no coincide con la sesión de Taller 2.0.');
       const credential=GoogleAuthProvider.credentialFromResult(result);
       if(!credential?.accessToken)throw Error('Google no entregó autorización para Drive.');
       driveAccessToken=credential.accessToken;
       driveTokenExpiry=Date.now()+45*60*1000;
       browseDriveFolder();
-    }catch(e){const el=document.getElementById('driveStatus');if(el)el.textContent=errors[e?.code]||e.message||'No se pudo conectar Drive';btn.disabled=false}
+    }catch(e){const el=document.getElementById('driveStatus');if(el)el.textContent=e?.code==='auth/user-mismatch'?'La cuenta elegida en Google es diferente. Usá '+(activeUser?.email||'la misma cuenta con la que entraste a Taller 2.0')+' para conectar Drive. Si los manuales están en otro Drive, compartí sus carpetas con esa cuenta.':(errors[e?.code]||e.message||'No se pudo conectar Drive');btn.disabled=false}
   };
 }
 async function driveRequest(url,options={}){
