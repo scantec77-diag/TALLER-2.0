@@ -9,25 +9,16 @@ import { getFirestore, doc, getDoc, setDoc } from 'https://www.gstatic.com/fireb
 import { firebaseConfig } from './firebase-config.js';
 const app=initializeApp(firebaseConfig),auth=getAuth(app),db=getFirestore(app);
 const driveApp=initializeApp(firebaseConfig,'taller20-drive-reader'),driveAuth=getAuth(driveApp);
-let activeUser=null,isAdmin=false,driveAccessToken=null,driveTokenExpiry=0,driveTrail=[],currentMachineIndex=null,pdfObjectUrl=null,driveOwnerEmail=null;
-const driveLocalKey=uid=>'taller20_drive_account_'+uid;
+const DEFAULT_DRIVE_EMAIL='manuales.taller.exolgan@gmail.com';
+let activeUser=null,isAdmin=false,driveAccessToken=null,driveTokenExpiry=0,driveTrail=[],currentMachineIndex=null,pdfObjectUrl=null,driveOwnerEmail=DEFAULT_DRIVE_EMAIL;
+// La cuenta de origen se fija en el código. El correo no otorga permisos de Drive.
 async function rememberDriveEmail(email){
-  if(!activeUser?.uid)throw Error('Iniciá sesión antes de vincular Drive.');
-  const selected=String(email||'').trim().toLowerCase();
-  if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(selected))throw Error('El correo de Drive no es válido.');
-  if(driveOwnerEmail&&driveOwnerEmail.toLowerCase()!==selected)throw Error('Esta cuenta ya quedó asociada y no se puede reemplazar.');
-  // El registro en Firestore es la fuente de verdad y no se actualiza en cada reconexión.
-  const ref=doc(db,'users',activeUser.uid,'settings','drive');
-  const existing=await getDoc(ref);
-  if(existing.exists()){
-    const saved=String(existing.data().email||'').trim().toLowerCase();
-    if(saved!==selected)throw Error('Ya hay otra cuenta asociada en tu perfil. No se puede reemplazar desde la aplicación.');
-  }else{
-    await setDoc(ref,{email:selected,updatedAt:new Date().toISOString()});
+  if(String(email||'').trim().toLowerCase()!==DEFAULT_DRIVE_EMAIL){
+    throw Error('La cuenta de manuales autorizada no coincide con la configurada en Taller 2.0.');
   }
-  driveOwnerEmail=selected;
-  localStorage.setItem(driveLocalKey(activeUser.uid),selected);
+  driveOwnerEmail=DEFAULT_DRIVE_EMAIL;
 }
+
 const driveProvider=new GoogleAuthProvider();driveProvider.addScope('https://www.googleapis.com/auth/drive.readonly');
 const googleProvider=new GoogleAuthProvider();
 const authBox=document.createElement('section');authBox.id='authBox';authBox.setAttribute('aria-live','polite');authBox.textContent='Comprobando tu sesión...';document.querySelector('main').prepend(authBox);
@@ -53,7 +44,7 @@ function loginScreen(){
   };
 }
 onAuthStateChanged(auth,async user=>{
-  activeUser=null;isAdmin=false;driveAccessToken=null;driveTokenExpiry=0;driveOwnerEmail=null;
+  activeUser=null;isAdmin=false;driveAccessToken=null;driveTokenExpiry=0;driveOwnerEmail=DEFAULT_DRIVE_EMAIL;
   if(!user){loginScreen();return}
   document.getElementById('view').innerHTML='';
   authBox.textContent='Cargando tu espacio...';
@@ -73,14 +64,8 @@ onAuthStateChanged(auth,async user=>{
     catch(e){console.warn('No se pudo consultar el rol; se usará acceso estándar.',e.code||e.message)}
     if(auth.currentUser?.uid!==user.uid)return;
     activeUser=user;
-    driveOwnerEmail=localStorage.getItem(driveLocalKey(user.uid))||null;
-    try{
-      const linked=await getDoc(doc(db,'users',user.uid,'settings','drive'));
-      if(linked.exists()&&typeof linked.data().email==='string'){
-        driveOwnerEmail=linked.data().email;
-        localStorage.setItem(driveLocalKey(user.uid),driveOwnerEmail);
-      }
-    }catch(e){console.warn('No se pudo sincronizar la cuenta de Drive:',e.code||e.message)}
+    // Se usa la biblioteca fija, sin heredar vínculos antiguos de este dispositivo.
+    driveOwnerEmail=DEFAULT_DRIVE_EMAIL;
     if(auth.currentUser?.uid!==user.uid)return;
     isAdmin=!!role&&role.exists()&&role.data().role==='admin';
     authBox.innerHTML='<p>Sesión: '+esc(user.email||user.displayName||'Cuenta de Google')+' <button class="settings" id="logout" type="button">Cerrar sesión</button></p>';
@@ -115,28 +100,23 @@ function openMachine(i){
 }
 
 function driveAccountField(){
-  const email=driveOwnerEmail||'';
-  return '<label for="savedDriveEmail">Cuenta de Google Drive asociada</label>'+
-    '<div class="account-row"><input id="savedDriveEmail" type="password" inputmode="email" autocomplete="off" spellcheck="false" autocapitalize="none"'+
-    ' placeholder="'+(email?'':'Correo de Drive (configurar una sola vez)')+'" value="'+esc(email)+'"'+
-    (email?' readonly':'')+' aria-label="'+(email?'Correo de Drive asociado, oculto y bloqueado':'Ingresá el correo de Drive para asociarlo una sola vez')+'">'+
-    '<button type="button" class="reconnect-icon" id="connectDrive" aria-label="'+(email?'Reconectar cuenta de Drive':'Asociar cuenta de Drive')+'" title="'+(email?'Reconectar cuenta de Drive':'Asociar cuenta de Drive')+'">⟳</button></div>';
+  return '<label for="savedDriveEmail">Cuenta de Google Drive de los manuales</label>'+
+    '<div class="account-row"><input id="savedDriveEmail" type="password" value="'+esc(DEFAULT_DRIVE_EMAIL)+'" readonly autocomplete="off" aria-label="Correo de manuales preconfigurado, oculto y no editable">'+
+    '<button type="button" class="reconnect-icon" id="connectDrive" aria-label="Reconectar Drive con la cuenta predeterminada" title="Reconectar Drive">⟳</button></div>';
 }
 async function authorizeDriveAccount(){
   if(!activeUser||!auth.currentUser||activeUser.uid!==auth.currentUser.uid)throw Error('La sesión de Taller cambió. Volvé a ingresar.');
-  const field=document.getElementById('savedDriveEmail');
-  const email=(driveOwnerEmail||field?.value||'').trim().toLowerCase();
-  if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email))throw Error('Escribí un correo electrónico válido para Drive.');
+  const email=DEFAULT_DRIVE_EMAIL;
   driveProvider.setCustomParameters({login_hint:email,prompt:''});
   const candidate=driveAuth.currentUser;
   const sameAccount=candidate?.email?.toLowerCase()===email;
   const result=sameAccount?await reauthenticateWithPopup(candidate,driveProvider):await signInWithPopup(driveAuth,driveProvider);
   const selected=result.user?.email?.trim().toLowerCase();
   if(!selected)throw Error('Google no informó qué cuenta autorizó el acceso.');
-  if(selected!==email)throw Error('Google abrió otra cuenta. Elegí la cuenta que configuraste originalmente: '+email);
+  if(selected!==email)throw Error('Google autorizó una cuenta diferente. Para acceder a los manuales, Google debe autorizar la cuenta preconfigurada.');
   const credential=GoogleAuthProvider.credentialFromResult(result);
   if(!credential?.accessToken)throw Error('Google no entregó permiso para leer Drive.');
-  await rememberDriveEmail(email);
+  await rememberDriveEmail(selected);
   driveAccessToken=credential.accessToken;
   driveTokenExpiry=Date.now()+45*60*1000;
 }
@@ -152,10 +132,10 @@ function bindConnectionButton(onSuccess){
 function manageConnection(){
   if(!isAdmin)return home();
   view.innerHTML='<button type="button" class="back" onclick="home()">← Volver</button>'+
-    '<h2>🔗 Gestionar conexión</h2><p>'+(driveOwnerEmail?'La cuenta asociada está oculta y bloqueada. Solo podés reconectar.':'Escribí una vez el correo que contiene los manuales y tocá ⟳ para confirmarlo con Google. Después quedará oculto y bloqueado.')+'</p>'+
+    '<h2>🔗 Gestionar conexión</h2><p>La cuenta de manuales ya viene configurada, oculta y bloqueada. Tocá ⟳ únicamente si Google necesita renovar la autorización.</p>'+
     driveAccountField()+
-    '<p class="connection-hint">El ícono ⟳ conecta o renueva el acceso de lectura a la misma cuenta; no cambia la dirección guardada.</p>'+
-    '<p class="connection-state" role="status" id="driveStatus">'+(driveAccessToken&&Date.now()<driveTokenExpiry?'Permiso temporal activo':driveOwnerEmail?'Cuenta fijada; permiso de Google pendiente o vencido':'Cuenta todavía no asociada')+'</p>'+
+    '<p class="connection-hint">El ícono ⟳ renueva el permiso de lectura de esa cuenta. No cambia el correo ni comparte la autorización con otros dispositivos.</p>'+
+    '<p class="connection-state" role="status" id="driveStatus">'+(driveAccessToken&&Date.now()<driveTokenExpiry?'Permiso de Google activo':'Cuenta predeterminada; pendiente de autorización de Google')+'</p>'+
     '<small>Los asteriscos ocultan el correo en pantalla. No reemplazan la autorización ni los permisos de Google.</small>';
   bindConnectionButton(()=>{manageConnection();const status=document.getElementById('driveStatus');if(status)status.textContent='Cuenta vinculada / acceso renovado ✓'});
 }
@@ -163,10 +143,10 @@ function connectDriveScreen(){
   if(!activeUser||currentMachineIndex===null)return home();
   const m=config.machines[currentMachineIndex];if(!m)return home();
   view.innerHTML='<button class="back" onclick="home()">← Volver</button><h2>'+esc(m.name)+'</h2>'+
-    '<p>'+(driveOwnerEmail?'Cuenta de archivos guardada y bloqueada. Tocá ⟳ para reconectarla.':'Escribí una sola vez el correo donde están los manuales. Se fijará al autorizarlo con Google.')+'</p>'+
+    '<p>Cuenta de archivos preconfigurada. Si la autorización está vencida, tocá ⟳ para renovarla y ver esta carpeta aquí mismo.</p>'+
     driveAccountField()+
     '<p class="connection-hint">Solo lectura; no se guardan contraseñas de Google.</p>'+
-    '<p class="connection-state" id="driveStatus" role="status"></p>'+externalDriveLink(m.folder);
+    '<p class="connection-state" id="driveStatus" role="status"></p>';
   bindConnectionButton(()=>browseDriveFolder());
 }
 async function driveRequest(url,options={}){
@@ -206,10 +186,10 @@ async function browseDriveFolder(pageToken=''){
     const data=await response.json();
     if(driveTrail[driveTrail.length-1]?.id!==id)return;
     const files=(data.files||[]);
-    if(!pageToken){view.innerHTML=folderHeader()+'<h2>📁 '+esc(current.name)+'</h2><p>Seleccioná una carpeta o archivo.</p><div id="driveItems"></div><p id="driveStatus" role="status"></p>'+externalDriveLink(id);bindTrailButtons()}
+    if(!pageToken){view.innerHTML=folderHeader()+'<h2>📁 '+esc(current.name)+'</h2><p>Seleccioná una carpeta o archivo. Se abre dentro de Taller 2.0.</p><div id="driveItems"></div><p id="driveStatus" role="status"></p>';bindTrailButtons()}
     const list=document.getElementById('driveItems');
     if(!list)return;
-    if(!files.length&&!pageToken)list.innerHTML='<p>No hay archivos visibles para esta cuenta.</p>';
+    if(!files.length&&!pageToken)list.innerHTML='<p>No hay archivos visibles en esta carpeta para la cuenta de manuales.</p>';
     const fragment=document.createDocumentFragment();
     for(const file of files){
       const btn=document.createElement('button');
@@ -234,7 +214,7 @@ async function browseDriveFolder(pageToken=''){
     if(e.message==='AUTH_NEEDED')return connectDriveScreen();
     const status=document.getElementById('driveStatus');
     if(status)status.textContent='No se pudo leer esta carpeta: '+e.message+'. Podés abrirla desde Drive.';
-    else{view.innerHTML=folderHeader()+'<h2>'+esc(current.name)+'</h2><p role="alert">No se pudo abrir la carpeta: '+esc(e.message)+'</p>'+externalDriveLink(current.id);bindTrailButtons()}
+    else{view.innerHTML=folderHeader()+'<h2>'+esc(current.name)+'</h2><p role="alert">No se pudo abrir la carpeta: '+esc(e.message)+'</p><p>Si la autorización venció, volvé a la máquina y tocá ⟳.</p>';bindTrailButtons()}
   }
 }
 async function openDriveFile(file){
