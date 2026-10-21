@@ -47,10 +47,12 @@ onAuthStateChanged(auth,async user=>{
       document.getElementById('exitLegacy').onclick=()=>signOut(auth);
       return;
     }
-    const role=await getDoc(doc(db,'roles',user.uid));
+    let role=null;
+    try{role=await getDoc(doc(db,'roles',user.uid))}
+    catch(e){console.warn('No se pudo consultar el rol; se usará acceso estándar.',e.code||e.message)}
     if(auth.currentUser?.uid!==user.uid)return;
     activeUser=user;
-    isAdmin=role.exists()&&role.data().role==='admin';
+    isAdmin=!!role&&role.exists()&&role.data().role==='admin';
     authBox.innerHTML='<p>Sesión: '+esc(user.email||user.displayName||'Cuenta de Google')+' <button class="settings" id="logout" type="button">Cerrar sesión</button></p>';
     document.getElementById('logout').onclick=()=>signOut(auth);
     home();
@@ -77,7 +79,7 @@ function openMachine(i){
 }
 function connectDriveScreen(){
   const m=config.machines[currentMachineIndex];
-  view.innerHTML='<button class="back" onclick="home()">← Volver</button><h2>'+esc(m.name)+'</h2><p>Para ver carpetas y manuales dentro de Taller 2.0, autorizá una vez el acceso de solo lectura a Google Drive.</p><p>Los documentos siguen protegidos por los permisos de Drive. Taller 2.0 no puede modificarlos.</p><button class="google-login" id="connectDrive" type="button"><span class="google-mark">G</span>Conectar Google Drive</button><p id="driveStatus" role="status"></p>'+externalDriveLink(m.folder);
+  view.innerHTML='<button class="back" onclick="home()">← Volver</button><h2>'+esc(m.name)+'</h2><p>Para ver carpetas y manuales dentro de Taller 2.0, autorizá el acceso de solo lectura a Google Drive. No volveremos a pedirte que elijas una cuenta al entrar en cada subcarpeta; puede ser necesario renovar el permiso al iniciar otra sesión.</p><p>Los documentos siguen protegidos por los permisos de Drive. Taller 2.0 no puede modificarlos.</p><button class="google-login" id="connectDrive" type="button"><span class="google-mark">G</span>Conectar Google Drive</button><p id="driveStatus" role="status"></p>'+externalDriveLink(m.folder);
   document.getElementById('connectDrive').onclick=async()=>{
     const btn=document.getElementById('connectDrive');btn.disabled=true;
     try{
