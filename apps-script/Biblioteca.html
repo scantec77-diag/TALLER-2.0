@@ -1,0 +1,178 @@
+<!doctype html><html lang="es"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Biblioteca Taller 2.0</title>
+<style>
+:root{font-family:system-ui,Arial;color:#ecf5ff;background:#0d1726}
+*{box-sizing:border-box}body{margin:0;padding:12px}
+h2{margin:5px 0 12px;font-size:1.15rem}p{line-height:1.4;color:#c8d6e6}
+button{font:inherit;color:#fff;background:#294563;border:1px solid #507091;border-radius:8px;padding:9px 10px;cursor:pointer}
+button:disabled{opacity:.45}input{font:inherit;width:100%;background:#122237;color:#fff;
+ border:1px solid #56738e;border-radius:9px;padding:12px;margin:6px 0 12px}
+.file{display:block;width:100%;text-align:left;overflow-wrap:anywhere;margin:5px 0;font-size:.91rem}
+#path{display:flex;flex-wrap:wrap;gap:5px;margin:9px 0}
+#status{min-height:22px}#pdfCanvas{display:block;max-width:100%;margin:15px auto;background:#fff}
+.toolbar{display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin:12px 0}
+a{color:#a8d6ff}#results{max-width:100%}
+</style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+</head><body>
+<h2>📚 Biblioteca técnica</h2>
+<p id="status" role="status">Conectando de forma segura con Taller 2.0…</p>
+<div id="path"></div>
+<div id="controls" hidden>
+<input id="search" type="search" placeholder="Buscar archivo por nombre…">
+<p id="count"></p><div id="results"></div><div id="pages" class="toolbar"></div>
+</div>
+<div id="preview"></div>
+<script>
+'use strict';
+const PARENT_ORIGIN='https://scantec77-diag.github.io';
+const ROOT_FOLDER_ID='11cVCcyrGyjp17oqkjZ5uS93PqstprZ9Y';
+const LIMIT=80,PDF_WORKER='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+let idToken='',trail=[],files=[],search='',page=0,busy=false,operation=0,pdfObjectUrl=null;
+const $=id=>document.getElementById(id);
+function status(s){$('status').textContent=String(s)}
+function gs(name,...args){return new Promise((resolve,reject)=>{
+  google.script.run.withSuccessHandler(resolve).withFailureHandler(reject)[name](...args)
+})}
+function errorString(e){return e?.message||String(e)||'Error desconocido'}
+window.addEventListener('message',e=>{
+  if(e.origin!==PARENT_ORIGIN||!e.data||e.data.type!=='taller20-library-init')return;
+  if(typeof e.data.idToken!=='string'||!e.data.idToken)return;
+  idToken=e.data.idToken;
+  const folder=String(e.data.folderId||ROOT_FOLDER_ID);
+  const name=String(e.data.folderName||'Biblioteca');
+  trail=[{id:folder,name}];
+  browse();
+});
+window.parent.postMessage({type:'taller20-library-ready'},PARENT_ORIGIN);
+function showTrail(){
+  const wrap=$('path');wrap.replaceChildren();
+  trail.forEach((entry,i)=>{
+    const b=document.createElement('button');b.textContent=(i?'› ':'📁 ')+entry.name;
+    b.onclick=()=>{trail=trail.slice(0,i+1);browse()};
+    wrap.appendChild(b);
+  });
+}
+function paintFiles(){
+  if($('controls').hidden)return;
+  const term=$('search').value.trim().toLocaleLowerCase('es');
+  if(term!==search){search=term;page=0}
+  const list=term?files.filter(f=>f.name.toLocaleLowerCase('es').includes(term)):files;
+  const total=list.length,pages=Math.max(1,Math.ceil(total/LIMIT));
+  page=Math.max(0,Math.min(page,pages-1));
+  const wrap=$('results');wrap.replaceChildren();
+  for(const file of list.slice(page*LIMIT,(page+1)*LIMIT)){
+    const folder=file.mimeType==='application/vnd.google-apps.folder';
+    const pdf=file.mimeType==='application/pdf'||/\.pdf$/i.test(file.name);
+    const b=document.createElement('button');b.className='file';
+    b.textContent=(folder?'📁 ':pdf?'📕 ':'📄 ')+file.name;
+    b.onclick=()=>{if(folder){trail.push({id:file.id,name:file.name});browse()}else openFile(file)};
+    wrap.appendChild(b);
+  }
+  if(!total)wrap.textContent=busy?'Buscando archivos…':term?'No se encontraron coincidencias.':'No hay archivos en esta carpeta.';
+  $('count').textContent=files.length+' archivos y carpetas'+(term?' · '+total+' resultados':'')+(busy?' · cargando el resto…':'');
+  const nav=$('pages');nav.replaceChildren();
+  if(total>LIMIT){
+    const left=document.createElement('button');left.textContent='← Anterior';left.disabled=page===0;
+    left.onclick=()=>{page--;paintFiles();window.scrollTo({top:0})};
+    const label=document.createElement('span');label.textContent='Página '+(page+1)+' / '+pages;
+    const right=document.createElement('button');right.textContent='Siguiente →';right.disabled=page>=pages-1;
+    right.onclick=()=>{page++;paintFiles();window.scrollTo({top:0})};
+    nav.append(left,label,right);
+  }
+}
+async function browse(){
+  const version=++operation,folder=trail[trail.length-1];files=[];busy=true;page=0;search='';
+  releasePdf();$('preview').replaceChildren();$('controls').hidden=false;$('search').value='';
+  showTrail();paintFiles();status('Leyendo '+folder.name+'…');
+  let next='';
+  try{
+    do{
+      const result=await gs('listarCarpeta',idToken,folder.id,next);
+      if(version!==operation)return;
+      files.push(...(result.files||[]));
+      next=result.nextPageToken||'';
+      busy=!!next;paintFiles();
+    }while(next);
+    status('Carpeta lista ✓');
+  }catch(e){if(version===operation)status('No se pudo leer la carpeta: '+errorString(e))}
+  finally{if(version===operation){busy=false;paintFiles()}}
+}
+function releasePdf(){if(pdfObjectUrl){URL.revokeObjectURL(pdfObjectUrl);pdfObjectUrl=null}}
+async function downloadData(file,version){
+  const meta=await gs('infoArchivo',idToken,file.id);
+  if(meta.size<=0)throw Error('Este documento no se puede descargar directamente.');
+  let offset=0;const parts=[];
+  while(offset<meta.size){
+    if(version!==operation)throw Error('Descarga cancelada.');
+    const r=await gs('bloqueArchivo',idToken,file.id,offset);
+    if(!r.length||r.start!==offset)throw Error('Error en una parte del archivo.');
+    const raw=atob(r.base64),bytes=new Uint8Array(raw.length);
+    for(let i=0;i<raw.length;i++)bytes[i]=raw.charCodeAt(i);
+    parts.push(bytes);offset+=bytes.length;
+    status('Descargando '+meta.name+'… '+Math.floor(offset/meta.size*100)+'%');
+  }
+  return {meta,blob:new Blob(parts,{type:meta.mimeType||'application/octet-stream'})};
+}
+function link(url,label){
+  const a=document.createElement('a');a.href=url;a.target='_blank';a.rel='noopener';a.textContent=label;return a;
+}
+async function openFile(file){
+  const version=++operation;releasePdf();$('controls').hidden=true;$('preview').replaceChildren();
+  showTrail();status('Abriendo '+file.name+'…');
+  const panel=$('preview'),title=document.createElement('h2');title.textContent=file.name;panel.append(title);
+  const back=document.createElement('button');back.textContent='← Volver a archivos';
+  back.onclick=()=>browse();panel.append(back);
+  const driveUrl=file.webViewLink||('https://drive.google.com/file/d/'+encodeURIComponent(file.id)+'/view');
+  const actions=document.createElement('p');actions.append(link(driveUrl,'Abrir en Drive ↗'));panel.append(actions);
+  const native=file.mimeType.startsWith('application/vnd.google-apps.');
+  if(native){status('Para este tipo de documento usá el enlace de Google Drive.');return}
+  try{
+    const result=await downloadData(file,version);
+    if(version!==operation)return;
+    pdfObjectUrl=URL.createObjectURL(result.blob);
+    const anchor=link(pdfObjectUrl,'⬇ Descargar archivo');
+    anchor.download=result.meta.name;actions.append(' · ',anchor);
+    const isPdf=file.mimeType==='application/pdf'||/\.pdf$/i.test(file.name);
+    if(!isPdf){status('Archivo listo para descargar.');return}
+    if(!window.pdfjsLib){
+      const iframe=document.createElement('iframe');iframe.title='Manual PDF';iframe.src=pdfObjectUrl;
+      iframe.style='width:100%;height:75vh;border:0';panel.append(iframe);
+      status('Abriendo PDF en el visor del navegador…');return;
+    }
+    pdfjsLib.GlobalWorkerOptions.workerSrc=PDF_WORKER;
+    const pdf=await pdfjsLib.getDocument({url:pdfObjectUrl}).promise;
+    if(version!==operation)return;
+    const bar=document.createElement('div');bar.className='toolbar';
+    const prev=document.createElement('button');prev.textContent='← Anterior';
+    const number=document.createElement('span');
+    const next=document.createElement('button');next.textContent='Siguiente →';
+    bar.append(prev,number,next);panel.append(bar);
+    const canvas=document.createElement('canvas');canvas.id='pdfCanvas';panel.append(canvas);
+    const ctx=canvas.getContext('2d');
+    let current=1,renderNumber=0;
+    const render=async()=>{
+      const seq=++renderNumber;status('Mostrando página '+current+'…');
+      const p=await pdf.getPage(current);
+      if(version!==operation||seq!==renderNumber)return;
+      const original=p.getViewport({scale:1});
+      const available=Math.min(900,Math.max(260,document.body.clientWidth-24));
+      const ratio=Math.min(window.devicePixelRatio||1,2);
+      const viewport=p.getViewport({scale:available/original.width*ratio});
+      canvas.width=viewport.width;canvas.height=viewport.height;
+      canvas.style.width=(viewport.width/ratio)+'px';
+      canvas.style.height=(viewport.height/ratio)+'px';
+      await p.render({canvasContext:ctx,viewport}).promise;
+      if(version!==operation||seq!==renderNumber)return;
+      number.textContent='Página '+current+' de '+pdf.numPages;
+      prev.disabled=current===1;next.disabled=current===pdf.numPages;
+      status('PDF cargado ✓');
+    };
+    prev.onclick=()=>{if(current>1){current--;render()}};
+    next.onclick=()=>{if(current<pdf.numPages){current++;render()}};
+    await render();
+  }catch(e){if(version===operation)status('No se pudo abrir el archivo: '+errorString(e))}
+}
+$('search').addEventListener('input',paintFiles);
+</script></body></html>
