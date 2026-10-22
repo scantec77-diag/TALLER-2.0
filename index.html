@@ -7,6 +7,8 @@
 .card.card-hyster{background:#ffdf00;color:#fff;border-color:#b59b00}
 .card.card-hyster:hover{background:#ffe633;border-color:#181818}
 .hyster-label{font-family:Arial,Helvetica,sans-serif;font-size:clamp(22px,5.8vw,30px);font-weight:900;line-height:1.1;color:#fff;-webkit-text-fill-color:#fff;-webkit-text-stroke:1.5px #000;paint-order:stroke fill;text-shadow:1px 1px 0 #000,-1px 1px 0 #000,1px -1px 0 #000,-1px -1px 0 #000}
+.card.card-konecranes{background:#87ceeb;color:#000;border-color:#58a9cc;font-family:Arial,Helvetica,sans-serif;font-size:clamp(15px,4vw,18px);font-weight:750}
+.card.card-konecranes:hover{background:#a3ddf3;border-color:#287fa4}
 </style><script defer src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script></head><body><header><h1>🔧 Taller 2.0</h1><p>Biblioteca de máquinas y documentación técnica</p></header><main><div id="view"></div></main>
 <script type="module">
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js';
@@ -274,7 +276,7 @@ function home(){
  view.innerHTML='<button class="settings" onclick="notes()">📝 Mi espacio</button><button class="settings" onclick="commonSpace()">💬 ESPACIO COMUN</button><button class="settings" onclick="pushSettings()">🔔 Notificaciones</button>'+
   (isAdmin?'<button class="settings" onclick="settings()">⚙️ Configuración</button><button class="settings" onclick="manageConnection()">🔗 Gestionar conexión</button><button class="settings" onclick="accessDashboard()">👥 Accesos</button>':'')+
   '<h2>Máquinas</h2><div class="grid">'+
-  (config.machines.map((m,i)=>{const info=m.folder==='1VeBO1uH2mimy2PEJ07gCOpLQY0t2xGg_'||String(m.name).trim().toUpperCase()==='INFO';const hyster=m.folder==='1FOgvdSfJZ9AlsTml2I1yU0ROJhcKXSCI'||String(m.name).trim().toUpperCase()==='HYSTER';return '<button class="card'+(info?' card-info':hyster?' card-hyster':'')+'" onclick="openMachine('+i+')">'+(info?'':'<span class="icon">⚙️</span>')+(hyster?'<span class="hyster-label">'+esc(m.name)+'</span>':esc(m.name))+'</button>'}).join('')||'<p>Agregá la primera máquina desde Configuración.</p>')+'</div>';
+  (config.machines.map((m,i)=>{const info=m.folder==='1VeBO1uH2mimy2PEJ07gCOpLQY0t2xGg_'||String(m.name).trim().toUpperCase()==='INFO';const hyster=m.folder==='1FOgvdSfJZ9AlsTml2I1yU0ROJhcKXSCI'||String(m.name).trim().toUpperCase()==='HYSTER';const konecranes=m.folder==='1Js5uk-b2RtAfM18PWFg6qZ4U8Rpb6ob5'||String(m.name).trim().toUpperCase()==='KONECRANES';return '<button class="card'+(info?' card-info':hyster?' card-hyster':konecranes?' card-konecranes':'')+'" onclick="openMachine('+i+')">'+(hyster?'<span class="hyster-label">'+esc(m.name)+'</span>':esc(m.name))+'</button>'}).join('')||'<p>Agregá la primera máquina desde Configuración.</p>')+'</div>';
 }
 function clearPdfPreview(){if(pdfObjectUrl){URL.revokeObjectURL(pdfObjectUrl);pdfObjectUrl=null}}
 function externalDriveLink(id){return '<p><a href="'+folderUrl(id)+'" target="_blank" rel="noopener">Abrir en Google Drive ↗</a></p>'}
