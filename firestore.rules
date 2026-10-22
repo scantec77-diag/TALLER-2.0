@@ -72,6 +72,26 @@ service cloud.firestore {
         && request.resource.data.createdAt == request.time;
       allow update, delete: if false;
     }
+    // Cada dispositivo puede ser registrado y desregistrado solo por el titular.
+    // El backend envía mensajes con Firebase Admin SDK, sin exponer tokens a terceros.
+    match /users/{uid}/pushDevices/{deviceId} {
+      allow get, list, delete: if owner(uid);
+      allow create, update: if owner(uid)
+        && deviceId.matches('^[0-9a-f]{64}
+      allow read: if owner(uid);
+      allow write: if false;
+    }
+  }
+}
+)
+        && request.resource.data.keys().hasAll(['token','platform','updatedAt'])
+        && request.resource.data.keys().hasOnly(['token','platform','updatedAt'])
+        && request.resource.data.token is string
+        && request.resource.data.token.size() > 10
+        && request.resource.data.token.size() <= 2048
+        && request.resource.data.platform == 'web'
+        && request.resource.data.updatedAt == request.time;
+    }
     match /roles/{uid} {
       allow read: if owner(uid);
       allow write: if false;
