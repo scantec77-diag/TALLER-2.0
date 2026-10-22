@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Taller 2.0</title><meta name="theme-color" content="#142337">
-<style>:root{font-family:system-ui,Arial;color:#edf3fa;background:#0d1726}*{box-sizing:border-box}body{margin:0}header{background:#142337;padding:20px;border-bottom:1px solid #304258}main{max-width:900px;margin:auto;padding:22px}h1{margin:0}p{color:#b7c6d7}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}.card{display:flex;align-items:center;gap:9px;background:linear-gradient(110deg,#263d56,#17283d);color:white;border:1px solid #405c7a;border-radius:9px;padding:9px 10px;height:62px;min-height:0;aspect-ratio:auto;text-align:left;cursor:pointer;font-size:.85rem;font-weight:650;overflow-wrap:anywhere;box-shadow:0 2px 8px #0002;transition:transform .15s,border-color .15s}.card:active{transform:scale(.97)}.card:hover{border-color:#75b7ed}.icon{font-size:1.4rem;display:flex;align-items:center;justify-content:center;flex:0 0 30px;margin:0}@media(max-width:420px){main{padding:14px}.grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.card{height:58px;padding:7px 8px;font-size:.79rem;gap:6px}.icon{font-size:1.25rem;flex-basis:25px}}button,input{font:inherit}.back,.settings{background:#294563;color:white;border:0;border-radius:9px;padding:10px 14px;margin:8px 8px 8px 0}input{width:100%;padding:12px;border-radius:8px;border:1px solid #526a84;background:#122237;color:white}label{display:block;margin:12px 0}small{color:#b7c6d7}a{color:#a8d6ff} .google-login{display:inline-flex;align-items:center;justify-content:center;gap:10px;background:#fff;color:#202124;border:1px solid #dadce0;border-radius:9px;padding:12px 18px;font-weight:650;cursor:pointer;min-height:46px}.google-login:hover{background:#f2f6fc}.google-login:disabled{opacity:.7;cursor:wait}.google-mark{font-size:1.25rem;font-weight:800;color:#4285f4}.reconnect-icon{width:54px;height:54px;padding:0;margin:8px 0 12px;border:1px solid #6a94bb;background:#294563;color:white;border-radius:9px;font-size:1.8rem;cursor:pointer;display:flex;align-items:center;justify-content:center}.reconnect-icon:hover{background:#365c80}.reconnect-icon:disabled{opacity:.5;cursor:wait}.connection-hint{font-size:.88rem;color:#b7c6d7}.connection-state{min-height:24px;color:#cee5fa}
+<style>:root{font-family:system-ui,Arial;color:#edf3fa;background:#0d1726}*{box-sizing:border-box}body{margin:0}header{background:#142337;padding:20px;border-bottom:1px solid #304258}main{max-width:900px;margin:auto;padding:22px}h1{margin:0}p{color:#b7c6d7}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}.card{display:flex;align-items:center;gap:9px;background:linear-gradient(110deg,#263d56,#17283d);color:white;border:1px solid #405c7a;border-radius:9px;padding:9px 10px;height:62px;min-height:0;aspect-ratio:auto;text-align:left;cursor:pointer;font-size:.85rem;font-weight:650;overflow-wrap:anywhere;box-shadow:0 2px 8px #0002;transition:transform .15s,border-color .15s}.card:active{transform:scale(.97)}.card:hover{border-color:#75b7ed}.icon{font-size:1.4rem;display:flex;align-items:center;justify-content:center;flex:0 0 30px;margin:0}@media(max-width:420px){main{padding:14px}.grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.card{height:58px;padding:7px 8px;font-size:.79rem;gap:6px}.icon{font-size:1.25rem;flex-basis:25px}}button,input{font:inherit}.back,.settings{background:#294563;color:white;border:0;border-radius:9px;padding:10px 14px;margin:8px 8px 8px 0}input{width:100%;padding:12px;border-radius:8px;border:1px solid #526a84;background:#122237;color:white}label{display:block;margin:12px 0}small{color:#b7c6d7}a{color:#a8d6ff} .google-login{display:inline-flex;align-items:center;justify-content:center;gap:10px;background:#fff;color:#202124;border:1px solid #dadce0;border-radius:9px;padding:12px 18px;font-weight:650;cursor:pointer;min-height:46px}.google-login:hover{background:#f2f6fc}.google-login:disabled{opacity:.7;cursor:wait}.google-mark{font-size:1.25rem;font-weight:800;color:#4285f4}.reconnect-icon{width:54px;height:54px;padding:0;margin:8px 0 12px;border:1px solid #6a94bb;background:#294563;color:white;border-radius:9px;font-size:1.8rem;cursor:pointer;display:flex;align-items:center;justify-content:center}.reconnect-icon:hover{background:#365c80}.reconnect-icon:disabled{opacity:.5;cursor:wait}.connection-hint{font-size:.88rem;color:#b7c6d7}.connection-state{min-height:24px;color:#cee5fa}.welcome-line{margin:5px 0 8px;font-size:1.13rem;font-weight:750;color:#edf3fa}.session-line{font-size:.85rem;color:#b7c6d7;margin:0 0 12px}
 </style></head><body><header><h1>🔧 Taller 2.0</h1><p>Biblioteca de máquinas y documentación técnica</p></header><main><div id="view"></div></main>
 <script type="module">
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js';
@@ -33,6 +33,20 @@ const errors={
   'auth/network-request-failed':'No hay conexión con Firebase. Revisá Internet e intentá nuevamente.'
 };
 function message(e){const el=document.getElementById('authMessage');if(el)el.textContent=errors[e?.code]||e?.message||String(e)}
+// El saludo usa solamente el nombre del perfil de Google; nunca deriva nombres del email.
+function updateGreeting(){
+  const el=document.getElementById('userWelcome');
+  if(!el||!activeUser)return;
+  const hour=new Date().getHours();
+  const greeting=hour>=5&&hour<12?'Buen día':hour>=12&&hour<20?'Buenas tardes':'Buenas noches';
+  const symbol=hour>=5&&hour<12?'☀️':hour>=12&&hour<20?'🌤️':'🌙';
+  const googleProfile=activeUser.providerData?.find(p=>p.providerId==='google.com');
+  const fullName=String(googleProfile?.displayName||activeUser.displayName||'').trim();
+  const firstName=fullName?fullName.split(/\s+/)[0]:'';
+  el.textContent=symbol+' ¡'+greeting+(firstName?', '+firstName:'')+'! Bienvenido a Taller 2.0.';
+}
+setInterval(updateGreeting,60000);
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)updateGreeting()});
 function loginScreen(){
   document.getElementById('view').innerHTML='';
   authBox.innerHTML='<h2>Ingresar a Taller 2.0</h2><p>Entrá con tu cuenta de Google. No necesitás registrarte ni crear una contraseña.</p><button class="google-login" id="googleLogin" type="button"><span class="google-mark" aria-hidden="true">G</span>Continuar con Google</button><p id="authMessage" role="status"></p>';
@@ -68,7 +82,8 @@ onAuthStateChanged(auth,async user=>{
     driveOwnerEmail=DEFAULT_DRIVE_EMAIL;
     if(auth.currentUser?.uid!==user.uid)return;
     isAdmin=!!role&&role.exists()&&role.data().role==='admin';
-    authBox.innerHTML='<p>Sesión: '+esc(user.email||user.displayName||'Cuenta de Google')+' <button class="settings" id="logout" type="button">Cerrar sesión</button></p>';
+    authBox.innerHTML='<p id="userWelcome" class="welcome-line"></p><p class="session-line">Sesión: '+esc(user.email||'Cuenta de Google')+' <button class="settings" id="logout" type="button">Cerrar sesión</button></p>';
+    updateGreeting();
     document.getElementById('logout').onclick=()=>signOut(auth);
     home();
   }catch(err){
