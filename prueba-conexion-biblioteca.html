@@ -13,10 +13,11 @@ button:disabled{opacity:.65}#status{white-space:pre-wrap}
 <a href="./">← Volver a Taller 2.0</a>
 <h1>🔧 Taller 2.0</h1><h2>Prueba de conexión de biblioteca</h2>
 <div class="panel">
-<p>Esta pantalla comprueba que Firebase reconozca tu cuenta y tu rol. Después permite abrir el servicio de Apps Script. No transmite claves ni tokens de sesión.</p>
+<p>Esta pantalla comprueba tu rol y prueba que el servicio rechace solicitudes sin autorización. No transmite contraseñas ni tokens de sesión.</p>
 <p id="status" role="status">Comprobando la sesión…</p>
 <button id="login" hidden>Iniciar sesión con Google</button>
 <button id="open" hidden>Abrir biblioteca en Apps Script ↗</button>
+<button id="deny" type="button" hidden>Probar bloqueo de acceso</button>
 </div>
 <p><small>Prueba independiente: la biblioteca de manuales y el acceso automático a los archivos aún no están integrados en esta pantalla.</small></p>
 </main>
@@ -26,7 +27,7 @@ import { getAuth, onAuthStateChanged, GoogleAuthProvider, signInWithPopup } from
 import { getFirestore, doc, getDoc } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js';
 import { firebaseConfig } from './firebase-config.js';
 const app=initializeApp(firebaseConfig),auth=getAuth(app),db=getFirestore(app);
-const status=document.getElementById('status'),login=document.getElementById('login'),open=document.getElementById('open');
+const status=document.getElementById('status'),login=document.getElementById('login'),open=document.getElementById('open'),deny=document.getElementById('deny');
 const scriptUrl='https://script.google.com/macros/s/AKfycbzPf-zrdvBwb6jxxTAmI6vdqQO8mkpJf1324NuIYFpBgwZS5kbHE1G2zdZDEihZPXUh/exec';
 login.onclick=async()=>{
  login.disabled=true;
@@ -34,8 +35,24 @@ login.onclick=async()=>{
  catch(e){status.textContent='Error de acceso: '+(e.message||e.code);login.disabled=false}
 };
 open.onclick=()=>{window.open(scriptUrl,'_blank','noopener,noreferrer')};
+deny.onclick=()=>{
+  // Prueba negativa sin tokens, contraseñas ni otros secretos.
+  // El servicio debe rechazar esta solicitud y NO devolver ningún archivo.
+  const f=document.createElement('form');
+  f.method='POST';
+  f.action=scriptUrl;
+  f.target='_blank';
+  const field=document.createElement('input');
+  field.type='hidden';
+  field.name='idToken';
+  field.value='prueba-sin-sesion-sin-datos-personales';
+  f.appendChild(field);
+  document.body.appendChild(f);
+  f.submit();
+  f.remove();
+};
 onAuthStateChanged(auth,async user=>{
- login.hidden=!!user;open.hidden=true;
+ login.hidden=!!user;open.hidden=true;deny.hidden=true;
  if(!user){status.textContent='Ingresá con la misma cuenta que usás en Taller 2.0.';login.disabled=false;return}
  status.textContent='Comprobando tu permiso de administrador…';
  try{
@@ -44,7 +61,7 @@ onAuthStateChanged(auth,async user=>{
   const value=role.exists()?role.data().role:'';
   if(value!=='admin'){status.textContent='La cuenta está conectada, pero no tiene rol de administrador en Firebase.';return}
   status.textContent='Administrador reconocido. Podés abrir el servicio de Apps Script para verificar que responde.';
-  open.hidden=false;
+  open.hidden=false;deny.hidden=false;
  }catch(e){status.textContent='No se pudo leer el permiso: '+(e.message||e.code)}
 });
 </script></body></html>
