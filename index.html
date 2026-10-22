@@ -10,15 +10,7 @@ import { firebaseConfig } from './firebase-config.js';
 import { libraryRequest } from './library-bridge.js';
 const app=initializeApp(firebaseConfig),auth=getAuth(app),db=getFirestore(app);
 const LIBRARY_CHUNK_SIZE=768*1024;
-const DEFAULT_DRIVE_EMAIL='manuales.taller.exolgan@gmail.com';
-let activeUser=null,isAdmin=false,driveAccessToken=null,driveTokenExpiry=0,driveTrail=[],currentMachineIndex=null,pdfObjectUrl=null,driveOwnerEmail=DEFAULT_DRIVE_EMAIL;
-// La cuenta de origen se fija en el código. El correo no otorga permisos de Drive.
-async function rememberDriveEmail(email){
-  if(String(email||'').trim().toLowerCase()!==DEFAULT_DRIVE_EMAIL){
-    throw Error('La cuenta de manuales autorizada no coincide con la configurada en Taller 2.0.');
-  }
-  driveOwnerEmail=DEFAULT_DRIVE_EMAIL;
-}
+let activeUser=null,isAdmin=false,driveTrail=[],currentMachineIndex=null,pdfObjectUrl=null;
 
 
 const googleProvider=new GoogleAuthProvider();
@@ -120,8 +112,6 @@ onAuthStateChanged(auth,async user=>{
     catch(e){console.warn('No se pudo consultar el rol; se usará acceso estándar.',e.code||e.message)}
     if(auth.currentUser?.uid!==user.uid)return;
     activeUser=user;
-    // Se usa la biblioteca fija, sin heredar vínculos antiguos de este dispositivo.
-    driveOwnerEmail=DEFAULT_DRIVE_EMAIL;
     if(auth.currentUser?.uid!==user.uid)return;
     isAdmin=!!role&&role.exists()&&role.data().role==='admin';
     authBox.innerHTML='<p id="userWelcome" class="welcome-line"></p><p class="session-line">Sesión: '+esc(user.email||'Cuenta de Google')+' <button class="settings" id="logout" type="button">Cerrar sesión</button></p>';
@@ -137,7 +127,7 @@ onAuthStateChanged(auth,async user=>{
 });
 const KEY="taller20_config_v1";let config=JSON.parse(localStorage.getItem(KEY)||'{"root":"11cVCcyrGyjp17oqkjZ5uS93PqstprZ9Y","machines":[]}');if(!config.root)config.root="11cVCcyrGyjp17oqkjZ5uS93PqstprZ9Y";const DRIVE_MACHINES=[{"name":"CONTAINERAS VIEJAS","folder":"1a_L4HR_McfGmnCuTXbgrZlf0xvSuxGPW"},{"name":"GOVERNOR","folder":"1k-WM5uNZb88MNCpKsS7rRffqXoi-8ar1"},{"name":"HYSTER","folder":"1FOgvdSfJZ9AlsTml2I1yU0ROJhcKXSCI"},{"name":"INFO","folder":"1VeBO1uH2mimy2PEJ07gCOpLQY0t2xGg_"},{"name":"INTA","folder":"1iYlZDsIFLqoTXFmrjkkj7StDnnzHhjLJ"},{"name":"KALMAR","folder":"1yZrf4vj5ZHLFkCZjklJ7ly0t38FVNKCK"},{"name":"KONECRANES","folder":"1Js5uk-b2RtAfM18PWFg6qZ4U8Rpb6ob5"},{"name":"LIEBHERR","folder":"1kBoSAqAeIpI3UtHOWWGN8t82cGAZYu-o"},{"name":"LINDE","folder":"17MpMCCTBXCTsANG_UkbEqTZR5pnhPAKf"},{"name":"masterdrive","folder":"1UXMehucxz8AcqfUweE6is2JrBXJNHNxT"},{"name":"noel","folder":"1SUGcDxSE3rIjPaL-p_f7PVC_EsuMFqVe"},{"name":"P02","folder":"1ypQvrsJTftXJE2vUytiSSeISsZ1wsum3"},{"name":"P03","folder":"1_SvG_J2lHT51yYcvT7jWaC4-7yDiEDC_"},{"name":"P04","folder":"1UvnD1-CKrpfxIxJOtvLcNWXj-YXYq39K"},{"name":"P05","folder":"1rIW1383BZGvr3mPVHZjk0vI0qKjud3cg"},{"name":"P06","folder":"1HpC1AdxIOsrNlmQXtzWlJU2U2fG3y14G"},{"name":"P07","folder":"1LAz3z1gHZ90t4VTe9mv4n4vGdGxVGSQD"},{"name":"P08","folder":"1Bq3vlwACX7VVDtstffS6wVwTRvrSzFPj"},{"name":"P09","folder":"1MvUKcXfyEIZR06CCLIIYZWyo7Bz63gKi"},{"name":"P10","folder":"1BM7t2Zha9B0nwYgnYQleO2JV2vrBN1PP"},{"name":"PACECO","folder":"1AX5tDnkEXyZyzhW4IwLhSxOn7n_oRTpT"},{"name":"S7","folder":"1zIMmDXgjZV-R-TUQwFzsqmTM9zNEIPfw"},{"name":"SISU","folder":"1DMljuYrC-amjtpbqaLIaEgKtMV7qd8Yz"}];for(const m of DRIVE_MACHINES){if(!config.machines.some(x=>x.folder===m.folder))config.machines.push(m)}localStorage.setItem(KEY,JSON.stringify(config));const view=document.getElementById('view');
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-function folderId(value){const m=String(value).match(/\/folders\/([\w-]+)/);return m?m[1]:String(value).trim()}function folderUrl(id){const url='https://drive.google.com/drive/folders/'+encodeURIComponent(id);const email=driveOwnerEmail||activeUser?.email;return email?url+'?authuser='+encodeURIComponent(email):url}
+function folderId(value){const m=String(value).match(/\/folders\/([\w-]+)/);return m?m[1]:String(value).trim()}
 const NOTES_KEY="taller20_notas_v1";async function notes(){if(!activeUser)return;const noteRef=doc(db,'users',activeUser.uid,'notes','personal');let value='';try{const snap=await getDoc(noteRef);value=snap.exists()?snap.data().content||'':''}catch(e){alert('No se pudieron cargar tus notas');return}view.innerHTML='<button class="back" onclick="home()">← Volver</button><h2>📝 Mi espacio</h2><p>Tu bloc de notas personal. Se guarda en tu cuenta privada.</p><textarea id="myNotes" placeholder="Anotá tareas, observaciones, recordatorios..." style="width:100%;min-height:320px;resize:vertical;padding:14px;border-radius:10px;background:#122237;color:white;border:1px solid #526a84;font:inherit"></textarea><p id="noteStatus">Los cambios se guardan automáticamente.</p>';const el=document.getElementById("myNotes");el.value=value;el.addEventListener("input",()=>{clearTimeout(window.noteTimer);window.noteTimer=setTimeout(async()=>{try{await setDoc(noteRef,{content:el.value,updatedAt:new Date().toISOString()});document.getElementById("noteStatus").textContent="Guardado en tu espacio privado ✓"}catch(e){document.getElementById("noteStatus").textContent="Error al guardar; revisá tu conexión"}},650)})}function home(){
  if(!activeUser)return;
  view.innerHTML='<button class="settings" onclick="notes()">📝 Mi espacio</button>'+
