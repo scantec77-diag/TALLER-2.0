@@ -10,6 +10,12 @@ import { firebaseConfig } from './firebase-config.js';
 const app=initializeApp(firebaseConfig),auth=getAuth(app),db=getFirestore(app);
 const driveApp=initializeApp(firebaseConfig,'taller20-drive-reader'),driveAuth=getAuth(driveApp);
 const DEFAULT_DRIVE_EMAIL='manuales.taller.exolgan@gmail.com';
+// El servicio se activa para todos únicamente después de publicarlo y verificar permisos.
+// Mientras tanto, el administrador puede probarlo en su propio equipo.
+const LIBRARY_SERVICE_URL='https://script.google.com/macros/s/AKfycbzPf-zrdvBwb6jxxTAmI6vdqQO8mkpJf1324NuIYFpBgwZS5kbHE1G2zdZDEihZPXUh/exec';
+const DIRECT_LIB_DEFAULT=false;
+const DIRECT_LIB_FLAG='taller20_direct_library_test';
+const useDirectLibrary=()=>DIRECT_LIB_DEFAULT||localStorage.getItem(DIRECT_LIB_FLAG)==='1';
 let activeUser=null,isAdmin=false,driveAccessToken=null,driveTokenExpiry=0,driveTrail=[],currentMachineIndex=null,pdfObjectUrl=null,driveOwnerEmail=DEFAULT_DRIVE_EMAIL;
 // La cuenta de origen se fija en el código. El correo no otorga permisos de Drive.
 async function rememberDriveEmail(email){
@@ -146,6 +152,22 @@ const NOTES_KEY="taller20_notas_v1";async function notes(){if(!activeUser)return
 }
 function clearPdfPreview(){if(pdfObjectUrl){URL.revokeObjectURL(pdfObjectUrl);pdfObjectUrl=null}}
 function externalDriveLink(id){return '<p><a href="'+folderUrl(id)+'" target="_blank" rel="noopener">Abrir en Google Drive ↗</a></p>'}
+async function openDirectLibrary(m){
+  if(!activeUser||auth.currentUser?.uid!==activeUser.uid)throw Error('La sesión cambió. Volvé a ingresar.');
+  if(!/^https:\/\/script\.google\.com\/macros\/s\/[A-Za-z0-9_-]+\/exec$/.test(LIBRARY_SERVICE_URL))
+    throw Error('El servicio seguro de la biblioteca todavía no está configurado.');
+  view.innerHTML='<button type="button" class="back" onclick="home()">← Volver</button>'+
+    '<h2>📚 '+esc(m.name)+'</h2><p id="driveStatus" role="status">Abriendo la biblioteca técnica…</p>';
+  const idToken=await activeUser.getIdToken();
+  const form=document.createElement('form');
+  form.method='POST';form.action=LIBRARY_SERVICE_URL;form.target='_self';
+  // El token viaja una sola vez en el cuerpo HTTPS. No se coloca en enlaces ni contraseñas de la APK.
+  for(const [key,val] of Object.entries({idToken,folderId:m.folder})){
+    const input=document.createElement('input');input.type='hidden';
+    input.name=key;input.value=val;form.append(input);
+  }
+  document.body.appendChild(form);form.submit();
+}
 async function openMachine(i){
   if(!activeUser)return;
   clearPdfPreview();
@@ -153,6 +175,10 @@ async function openMachine(i){
   const m=config.machines[i];
   if(!m)return home();
   driveTrail=[{id:m.folder,name:m.name}];
+  if(useDirectLibrary())return openDirectLibrary(m).catch(e=>{
+    const status=document.getElementById('driveStatus');
+    if(status)status.textContent='No se pudo abrir la biblioteca: '+e.message;
+  });
   // Con permiso activo, entra directamente al contenido sin abrir otra página.
   if(driveAccessToken&&Date.now()<driveTokenExpiry)return browseDriveFolder();
   // Si el permiso se venció, se intenta renovarlo desde el mismo toque del usuario.
@@ -202,7 +228,16 @@ function manageConnection(){
   view.innerHTML='<button type="button" class="back" onclick="home()">← Volver</button>'+
     '<h2>🔗 Gestionar conexión</h2>'+
     driveAccountField()+
-    '<p class="connection-state" role="status" id="driveStatus"></p>';
+    '<p class="connection-state" role="status" id="driveStatus"></p>'+
+    '<h3>Acceso directo (prueba de administrador)</h3>'+
+    '<p>Requiere publicar el código nuevo de Apps Script antes de activarlo para todos.</p>'+
+    '<button class="settings" id="directLibraryToggle" type="button">'+
+    (useDirectLibrary()?'Desactivar prueba de acceso directo':'Probar acceso sin segunda contraseña')+'</button>';
+  document.getElementById('directLibraryToggle').onclick=()=>{
+    if(useDirectLibrary())localStorage.removeItem(DIRECT_LIB_FLAG);
+    else localStorage.setItem(DIRECT_LIB_FLAG,'1');
+    manageConnection();
+  };
   bindConnectionButton(()=>{manageConnection();document.getElementById('driveStatus').textContent='Acceso a Drive renovado ✓'});
 }
 function connectDriveScreen(){
