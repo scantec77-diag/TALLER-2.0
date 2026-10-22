@@ -9,10 +9,36 @@ const FIREBASE_WEB_API_KEY_='AIzaSyCHFS8iMwgTdK_JGsxSTodblP6OJFahWbA';
 const FIREBASE_PROJECT_='taller-2-0';
 const MAX_CHUNK_=384*1024;
 
+// La biblioteca se abre con POST desde Taller 2.0: no hay segundo login de Google.
 function doGet(){
-  return HtmlService.createHtmlOutputFromFile('Biblioteca')
-    .setTitle('Taller 2.0 · Biblioteca')
-    .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+  return HtmlService.createHtmlOutput('<h2>Biblioteca de Taller 2.0</h2><p>Abrí un manual desde Taller 2.0 para ingresar.</p>')
+    .setTitle('Taller 2.0 · Biblioteca');
+}
+function doPost(e){
+  try{
+    const params=(e&&e.parameter)||{};
+    const user=validUser_(String(params.idToken||''));
+    const folder=String(params.folderId||LIBRARY_ROOT_);
+    const info=allowedFile_(folder,true);
+    const session=Utilities.getUuid()+'-'+Utilities.getUuid();
+    CacheService.getScriptCache().put('library_'+session,user.uid,21600);
+    const t=HtmlService.createTemplateFromFile('Biblioteca');
+    t.sessionJson=JSON.stringify(session);
+    t.folderJson=JSON.stringify(folder);
+    t.folderNameJson=JSON.stringify(info.name||'Biblioteca');
+    return t.evaluate().setTitle('Taller 2.0 · Biblioteca');
+  }catch(err){
+    return HtmlService.createHtmlOutput('<h3>Acceso a la biblioteca no autorizado</h3>'+
+      '<p>Volvé a Taller 2.0 para iniciar sesión o pedir permiso de acceso.</p>'+
+      '<p><a href="https://scantec77-diag.github.io/TALLER-2.0/">Volver a Taller 2.0</a></p>')
+      .setTitle('Taller 2.0 · Permiso requerido');
+  }
+}
+function validSession_(session){
+  if(!/^[0-9a-f-]{73}$/.test(String(session||'')))throw Error('Sesión inválida. Volvé a ingresar desde Taller 2.0.');
+  const uid=CacheService.getScriptCache().get('library_'+session);
+  if(!uid)throw Error('La sesión de biblioteca venció. Volvé a ingresar desde Taller 2.0.');
+  return uid;
 }
 function jsonRequest_(url,opt){
   const response=UrlFetchApp.fetch(url,Object.assign({muteHttpExceptions:true,followRedirects:true},opt||{}));
@@ -27,7 +53,8 @@ function validUser_(token){
   const key=Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256,token)
     .map(x=>(x<0?x+256:x).toString(16).padStart(2,'0')).join('');
   const cache=CacheService.getScriptCache();
-  if(cache.get('auth_'+key)==='ok')return true;
+  const previous=cache.get('auth_'+key);
+  if(previous)return {uid:previous};
   const verify=jsonRequest_('https://identitytoolkit.googleapis.com/v1/accounts:lookup?key='+encodeURIComponent(FIREBASE_WEB_API_KEY_),{
     method:'post',contentType:'application/json',payload:JSON.stringify({idToken:token})
   });
@@ -41,8 +68,8 @@ function validUser_(token){
   const roles=jsonRequest_(roleUrl,{headers:{Authorization:'Bearer '+token}});
   const role=roles.fields?.role?.stringValue||'';
   if(role!=='admin'&&role!=='reader')throw Error('Tu usuario todavía no tiene permiso de biblioteca.');
-  cache.put('auth_'+key,'ok',120);
-  return true;
+  cache.put('auth_'+key,user.localId,120);
+  return {uid:user.localId};
 }
 function driveApi_(relative,opt){
   const url='https://www.googleapis.com/drive/v3/'+relative;
@@ -72,8 +99,8 @@ function allowedFile_(id,folderOnly){
   }
   throw Error('El archivo no pertenece a la biblioteca autorizada.');
 }
-function listarCarpeta(idToken,folderId,pageToken){
-  validUser_(idToken);
+function listarCarpeta(session,folderId,pageToken){
+  validSession_(session);
   allowedFile_(folderId,true);
   const q="'"+folderId+"' in parents and trashed = false";
   let params='files?'+[
@@ -90,14 +117,14 @@ function listarCarpeta(idToken,folderId,pageToken){
   return {files:(d.files||[]).map(f=>({id:f.id,name:f.name,mimeType:f.mimeType,size:Number(f.size)||0,webViewLink:f.webViewLink||''})),
           nextPageToken:d.nextPageToken||''};
 }
-function infoArchivo(idToken,fileId){
-  validUser_(idToken);
+function infoArchivo(session,fileId){
+  validSession_(session);
   const file=allowedFile_(fileId,false);
   if(file.mimeType==='application/vnd.google-apps.folder')throw Error('Seleccioná un documento.');
   return {id:file.id,name:file.name,mimeType:file.mimeType,size:Number(file.size)||0,webViewLink:file.webViewLink||''};
 }
-function bloqueArchivo(idToken,fileId,start){
-  validUser_(idToken);
+function bloqueArchivo(session,fileId,start){
+  validSession_(session);
   const file=allowedFile_(fileId,false);
   const size=Number(file.size)||0;
   const offset=Number(start);
