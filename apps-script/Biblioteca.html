@@ -117,17 +117,21 @@ async function openFile(file){
   const panel=$('preview'),title=document.createElement('h2');title.textContent=file.name;panel.append(title);
   const back=document.createElement('button');back.textContent='← Volver a archivos';
   back.onclick=()=>browse();panel.append(back);
-  const driveUrl=file.webViewLink||('https://drive.google.com/file/d/'+encodeURIComponent(file.id)+'/view');
-  const actions=document.createElement('p');actions.append(link(driveUrl,'Abrir en Drive ↗'));panel.append(actions);
+  const actions=document.createElement('p');panel.append(actions);
   const native=file.mimeType.startsWith('application/vnd.google-apps.');
-  if(native){status('Para este tipo de documento usá el enlace de Google Drive.');return}
   try{
-    const result=await downloadData(file,version);
+    let result;
+    if(native){
+      const exp=await gs('exportarDocumentoPDF',librarySession,file.id);
+      const raw=atob(exp.base64),bytes=new Uint8Array(raw.length);
+      for(let i=0;i<raw.length;i++)bytes[i]=raw.charCodeAt(i);
+      result={meta:{name:exp.name,mimeType:'application/pdf'},blob:new Blob([bytes],{type:'application/pdf'})};
+    }else result=await downloadData(file,version);
     if(version!==operation)return;
     pdfObjectUrl=URL.createObjectURL(result.blob);
     const anchor=link(pdfObjectUrl,'⬇ Descargar archivo');
     anchor.download=result.meta.name;actions.append(' · ',anchor);
-    const isPdf=file.mimeType==='application/pdf'||/\.pdf$/i.test(file.name);
+    const isPdf=native||file.mimeType==='application/pdf'||/\.pdf$/i.test(file.name);
     if(!isPdf){status('Archivo listo para descargar.');return}
     if(!window.pdfjsLib){
       const iframe=document.createElement('iframe');iframe.title='Manual PDF';iframe.src=pdfObjectUrl;
@@ -165,7 +169,7 @@ async function openFile(file){
     prev.onclick=()=>{if(current>1){current--;render()}};
     next.onclick=()=>{if(current<pdf.numPages){current++;render()}};
     await render();
-  }catch(e){if(version===operation)status('No se pudo abrir el archivo: '+errorString(e))}
+  }catch(e){if(version===operation)status('No se pudo abrir el archivo: '+errorString(e)+'. Volvé a la biblioteca para elegir otro documento.')}
 }
 $('search').addEventListener('input',paintFiles);
 browse();
