@@ -4,11 +4,12 @@
 </style></head><body><header><h1>🔧 Taller 2.0</h1><p>Biblioteca de máquinas y documentación técnica</p></header><main><div id="view"></div></main>
 <script type="module">
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js';
-import { getAuth, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, linkWithPopup, reauthenticateWithPopup, signOut } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js';
+import { getAuth, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, linkWithPopup, signOut } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js';
 import { getFirestore, doc, getDoc, setDoc, collection, getDocs, increment, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js';
 import { firebaseConfig } from './firebase-config.js';
+import { libraryRequest } from './library-bridge.js';
 const app=initializeApp(firebaseConfig),auth=getAuth(app),db=getFirestore(app);
-const driveApp=initializeApp(firebaseConfig,'taller20-drive-reader'),driveAuth=getAuth(driveApp);
+const LIBRARY_CHUNK_SIZE=768*1024;
 const DEFAULT_DRIVE_EMAIL='manuales.taller.exolgan@gmail.com';
 let activeUser=null,isAdmin=false,driveAccessToken=null,driveTokenExpiry=0,driveTrail=[],currentMachineIndex=null,pdfObjectUrl=null,driveOwnerEmail=DEFAULT_DRIVE_EMAIL;
 // La cuenta de origen se fija en el código. El correo no otorga permisos de Drive.
@@ -19,7 +20,7 @@ async function rememberDriveEmail(email){
   driveOwnerEmail=DEFAULT_DRIVE_EMAIL;
 }
 
-const driveProvider=new GoogleAuthProvider();driveProvider.addScope('https://www.googleapis.com/auth/drive.readonly');
+
 const googleProvider=new GoogleAuthProvider();
 const authBox=document.createElement('section');authBox.id='authBox';authBox.setAttribute('aria-live','polite');authBox.textContent='Comprobando tu sesión...';document.querySelector('main').prepend(authBox);
 const errors={
@@ -99,7 +100,7 @@ function loginScreen(){
   };
 }
 onAuthStateChanged(auth,async user=>{
-  activeUser=null;isAdmin=false;driveAccessToken=null;driveTokenExpiry=0;driveOwnerEmail=DEFAULT_DRIVE_EMAIL;
+  activeUser=null;isAdmin=false;
   if(!user){forgetAccessSession();loginScreen();return}
   document.getElementById('view').innerHTML='';
   authBox.textContent='Cargando tu espacio...';
