@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Taller 2.0</title><meta name="theme-color" content="#142337">
-<style>:root{font-family:system-ui,Arial;color:#edf3fa;background:#0d1726}*{box-sizing:border-box}body{margin:0}header{background:#142337;padding:20px;border-bottom:1px solid #304258}main{max-width:900px;margin:auto;padding:22px}h1{margin:0}p{color:#b7c6d7}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}.card{display:flex;align-items:center;gap:9px;background:linear-gradient(110deg,#263d56,#17283d);color:white;border:1px solid #405c7a;border-radius:9px;padding:9px 10px;height:62px;min-height:0;aspect-ratio:auto;text-align:left;cursor:pointer;font-size:.85rem;font-weight:650;overflow-wrap:anywhere;box-shadow:0 2px 8px #0002;transition:transform .15s,border-color .15s}.card:active{transform:scale(.97)}.card:hover{border-color:#75b7ed}.icon{font-size:1.4rem;display:flex;align-items:center;justify-content:center;flex:0 0 30px;margin:0}@media(max-width:420px){main{padding:14px}.grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.card{height:58px;padding:7px 8px;font-size:.79rem;gap:6px}.icon{font-size:1.25rem;flex-basis:25px}}button,input{font:inherit}.back,.settings{background:#294563;color:white;border:0;border-radius:9px;padding:10px 14px;margin:8px 8px 8px 0}input{width:100%;padding:12px;border-radius:8px;border:1px solid #526a84;background:#122237;color:white}label{display:block;margin:12px 0}small{color:#b7c6d7}a{color:#a8d6ff} .google-login{display:inline-flex;align-items:center;justify-content:center;gap:10px;background:#fff;color:#202124;border:1px solid #dadce0;border-radius:9px;padding:12px 18px;font-weight:650;cursor:pointer;min-height:46px}.google-login:hover{background:#f2f6fc}.google-login:disabled{opacity:.7;cursor:wait}.google-mark{font-size:1.25rem;font-weight:800;color:#4285f4}.reconnect-icon{width:54px;height:54px;padding:0;margin:8px 0 12px;border:1px solid #6a94bb;background:#294563;color:white;border-radius:9px;font-size:1.8rem;cursor:pointer;display:flex;align-items:center;justify-content:center}.reconnect-icon:hover{background:#365c80}.reconnect-icon:disabled{opacity:.5;cursor:wait}.connection-hint{font-size:.88rem;color:#b7c6d7}.connection-state{min-height:24px;color:#cee5fa}.welcome-line{margin:5px 0 8px;font-size:1.13rem;font-weight:750;color:#edf3fa}.session-line{font-size:.85rem;color:#b7c6d7;margin:0 0 12px}.access-sum{display:flex;gap:12px;flex-wrap:wrap;margin:12px 0}.access-sum span{padding:12px;border:1px solid #405c7a;border-radius:10px;background:#17283d}.access-sum strong{font-size:1.4rem;display:block}.access-person{padding:12px 0;border-bottom:1px solid #304258}.access-person small{display:block;line-height:1.5}
+<style>:root{font-family:system-ui,Arial;color:#edf3fa;background:#0d1726}*{box-sizing:border-box}body{margin:0}header{background:#142337;padding:20px;border-bottom:1px solid #304258}main{max-width:900px;margin:auto;padding:22px}h1{margin:0}p{color:#b7c6d7}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}.card{display:flex;align-items:center;gap:9px;background:linear-gradient(110deg,#263d56,#17283d);color:white;border:1px solid #405c7a;border-radius:9px;padding:9px 10px;height:62px;min-height:0;aspect-ratio:auto;text-align:left;cursor:pointer;font-size:.85rem;font-weight:650;overflow-wrap:anywhere;box-shadow:0 2px 8px #0002;transition:transform .15s,border-color .15s}.card:active{transform:scale(.97)}.card:hover{border-color:#75b7ed}.icon{font-size:1.4rem;display:flex;align-items:center;justify-content:center;flex:0 0 30px;margin:0}@media(max-width:420px){main{padding:14px}.grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.card{height:58px;padding:7px 8px;font-size:.79rem;gap:6px}.icon{font-size:1.25rem;flex-basis:25px}}button,input{font:inherit}.back,.settings{background:#294563;color:white;border:0;border-radius:9px;padding:10px 14px;margin:8px 8px 8px 0}input{width:100%;padding:12px;border-radius:8px;border:1px solid #526a84;background:#122237;color:white}label{display:block;margin:12px 0}small{color:#b7c6d7}a{color:#a8d6ff} .google-login{display:inline-flex;align-items:center;justify-content:center;gap:10px;background:#fff;color:#202124;border:1px solid #dadce0;border-radius:9px;padding:12px 18px;font-weight:650;cursor:pointer;min-height:46px}.google-login:hover{background:#f2f6fc}.google-login:disabled{opacity:.7;cursor:wait}.google-mark{font-size:1.25rem;font-weight:800;color:#4285f4}.reconnect-icon{width:54px;height:54px;padding:0;margin:8px 0 12px;border:1px solid #6a94bb;background:#294563;color:white;border-radius:9px;font-size:1.8rem;cursor:pointer;display:flex;align-items:center;justify-content:center}.reconnect-icon:hover{background:#365c80}.reconnect-icon:disabled{opacity:.5;cursor:wait}.connection-hint{font-size:.88rem;color:#b7c6d7}.connection-state{min-height:24px;color:#cee5fa}.welcome-line{margin:5px 0 8px;font-size:1.13rem;font-weight:750;color:#edf3fa}.session-line{font-size:.85rem;color:#b7c6d7;margin:0 0 12px}.access-sum{display:flex;gap:12px;flex-wrap:wrap;margin:12px 0}.access-sum span{padding:12px;border:1px solid #405c7a;border-radius:10px;background:#17283d}.access-sum strong{font-size:1.4rem;display:block}.access-person{padding:12px 0;border-bottom:1px solid #304258}.access-person small{display:block;line-height:1.5}.access-person details{margin:10px 0 2px;padding:9px;border:1px solid #405c7a;border-radius:8px;background:#13263b}.access-person summary{cursor:pointer;font-weight:650}.access-person h3{font-size:1rem;margin:16px 0 8px}.access-library-item{padding:8px 0;border-bottom:1px solid #304258;overflow-wrap:anywhere}.access-library-item strong{font-size:.9rem}
 #commonAlerts{position:fixed;top:12px;right:12px;width:min(390px,calc(100vw - 24px));z-index:1000;display:grid;gap:8px}.common-alert{display:flex;background:#203c58;border:1px solid #75b7ed;border-radius:12px;box-shadow:0 6px 24px #0008;overflow:hidden}.common-alert-open{flex:1;min-width:0;background:none;border:0;color:#edf3fa;text-align:left;padding:14px;cursor:pointer}.common-alert-open strong,.common-alert-open span{display:block;overflow-wrap:anywhere}.common-alert-open span{margin-top:6px;font-size:.9rem;color:#d4e4f4}.common-alert-close{align-self:flex-start;background:none;border:0;color:white;font-size:1.6rem;min-width:44px;min-height:44px;cursor:pointer}
 .card.card-info{background:#ccecff;color:#1255a0;border-color:#86c5ec;font-family:Arial,Helvetica,sans-serif;font-size:clamp(17px,4.5vw,21px);font-weight:850;letter-spacing:.2px}.card.card-info:hover{background:#bce5ff;border-color:#357ec1}
 
@@ -214,23 +214,71 @@ async function recordAccess(user){
     console.warn('Registro de accesos no disponible: comprobá las reglas de Firebase.',e.code||e.message);
   }finally{accessWritePending=false}
 }
+// Registro de navegación de la biblioteca técnica. No guarda archivos ni sus contenidos.
+// Un registro resume aperturas por usuario/elemento desde la instalación de esta versión.
+async function recordLibraryVisit(kind,id,name,path){
+  const user=activeUser;
+  if(!user?.uid||auth.currentUser?.uid!==user.uid||!['folder','file'].includes(kind)||
+     !/^[A-Za-z0-9_-]{1,160}$/.test(String(id)))return;
+  try{
+    await setDoc(doc(db,'users',user.uid,'libraryVisits',kind+'_'+id),{
+      kind,itemId:id,name:String(name||'Sin nombre').slice(0,160),
+      path:String(path||name||'').slice(0,600),
+      visitCount:increment(1),lastVisited:serverTimestamp()
+    },{merge:true});
+  }catch(e){
+    console.warn('No se pudo registrar una apertura de la biblioteca:',e.code||e.message);
+  }
+}
 async function accessDashboard(){
   if(!activeUser||!isAdmin)return home();
-  view.innerHTML='<button class="back" onclick="home()">← Volver</button><h2>👥 Accesos</h2><p id="accessStatus">Cargando registro...</p>';
+  const currentAdmin=activeUser.uid;
+  view.innerHTML='<button class="back" onclick="home()">← Volver</button><h2>👥 Accesos</h2><p id="accessStatus">Cargando registros...</p>';
   try{
     const snap=await getDocs(collection(db,'accessStats'));
-    if(!activeUser||!isAdmin||!document.getElementById('accessStatus'))return;
-    const users=snap.docs.map(d=>d.data()).sort((a,b)=>(b.lastAccess?.toMillis?.()||0)-(a.lastAccess?.toMillis?.()||0));
-    const total=users.reduce((n,u)=>n+(Number(u.accessCount)||0),0);
+    if(activeUser?.uid!==currentAdmin||!isAdmin||!document.getElementById('accessStatus'))return;
+    const users=await Promise.all(snap.docs.map(async d=>{
+      const data=d.data();
+      try{
+        const visits=await getDocs(collection(db,'users',d.id,'libraryVisits'));
+        return {...data,items:visits.docs.map(x=>x.data()),readError:''};
+      }catch(e){
+        return {...data,items:[],readError:e.code||e.message||'Error desconocido'};
+      }
+    }));
+    if(activeUser?.uid!==currentAdmin||!isAdmin||!document.getElementById('accessStatus'))return;
+    users.sort((a,b)=>(b.lastAccess?.toMillis?.()||0)-(a.lastAccess?.toMillis?.()||0));
+    const dateOf=stamp=>stamp?.toDate?.()?.toLocaleString('es-AR',{dateStyle:'short',timeStyle:'short'})||'Sin fecha';
+    const totalEntries=users.reduce((n,u)=>n+(Number(u.accessCount)||0),0);
+    const totalFolders=users.reduce((n,u)=>n+u.items.filter(x=>x.kind==='folder').reduce((s,x)=>s+(Number(x.visitCount)||0),0),0);
+    const totalFiles=users.reduce((n,u)=>n+u.items.filter(x=>x.kind==='file').reduce((s,x)=>s+(Number(x.visitCount)||0),0),0);
     const cards=users.map(u=>{
-      const last=u.lastAccess?.toDate?.();
-      const date=last?last.toLocaleString('es-AR',{dateStyle:'short',timeStyle:'short'}):'Sin fecha';
-      return '<div class="access-person"><strong>'+esc(u.displayName||'Nombre no disponible')+'</strong><small>'+esc(u.email||'')+'</small><small>🔁 Ingresos: '+(Number(u.accessCount)||0)+' · 🕒 Último acceso: '+esc(date)+'</small></div>';
-    }).join('')||'<p>Todavía no hay ingresos registrados. Los accesos anteriores a esta actualización no se pueden reconstruir.</p>';
-    view.innerHTML='<button class="back" onclick="home()">← Volver</button><h2>👥 Accesos</h2><p>Sesiones registradas desde que se habilitó el contador. Actualizar la página no suma ingresos.</p><div class="access-sum"><span><strong>'+users.length+'</strong>Usuarios</span><span><strong>'+total+'</strong>Ingresos</span></div><button class="settings" onclick="accessDashboard()">⟳ Actualizar</button>'+cards;
+      const folders=u.items.filter(x=>x.kind==='folder').sort((a,b)=>(b.lastVisited?.toMillis?.()||0)-(a.lastVisited?.toMillis?.()||0));
+      const files=u.items.filter(x=>x.kind==='file').sort((a,b)=>(b.lastVisited?.toMillis?.()||0)-(a.lastVisited?.toMillis?.()||0));
+      const formatItems=(items,emoji)=>items.map(x=>
+        '<div class="access-library-item"><strong>'+emoji+' '+esc(x.path||x.name||'Sin nombre')+'</strong>'+
+        '<small>🔁 Aperturas: '+(Number(x.visitCount)||0)+' · 🕒 Última: '+esc(dateOf(x.lastVisited))+'</small></div>'
+      ).join('')||'<p>No hay aperturas registradas.</p>';
+      const foldersCount=folders.reduce((n,x)=>n+(Number(x.visitCount)||0),0);
+      const filesCount=files.reduce((n,x)=>n+(Number(x.visitCount)||0),0);
+      return '<section class="access-person"><strong>'+esc(u.displayName||'Nombre no disponible')+'</strong>'+
+        '<small>'+esc(u.email||'')+'</small>'+
+        '<small>🔁 Ingresos: '+(Number(u.accessCount)||0)+' · 🕒 Último: '+esc(dateOf(u.lastAccess))+'</small>'+
+        (u.readError?'<small role="alert">No se pudo leer la actividad de biblioteca ('+esc(u.readError)+'). Revisá las reglas de Firebase.</small>':
+        '<details><summary>📁 Carpetas: '+foldersCount+' · 📄 Documentos: '+filesCount+'</summary>'+
+        '<h3>Carpetas abiertas</h3>'+formatItems(folders,'📁')+
+        '<h3>Documentos seleccionados</h3>'+formatItems(files,'📄')+'</details>')+
+        '</section>';
+    }).join('')||'<p>No hay ingresos registrados todavía. No se pueden recuperar visitas anteriores a la activación del registro.</p>';
+    view.innerHTML='<button class="back" onclick="home()">← Volver</button><h2>👥 Accesos</h2>'+
+      '<p>Actividad desde que se activó el registro. Se cuentan aperturas dentro de Taller 2.0; no permite conocer si alguien leyó por completo un documento ni las visitas directas a Google Drive.</p>'+
+      '<div class="access-sum"><span><strong>'+users.length+'</strong>Usuarios</span>'+
+      '<span><strong>'+totalEntries+'</strong>Ingresos</span><span><strong>'+totalFolders+'</strong>Carpetas</span>'+
+      '<span><strong>'+totalFiles+'</strong>Documentos</span></div>'+
+      '<button class="settings" onclick="accessDashboard()">⟳ Actualizar</button>'+cards;
   }catch(e){
     const el=document.getElementById('accessStatus');
-    if(el)el.textContent='No se pudo leer el registro ('+(e.code||'error')+'). Revisá las reglas publicadas en Firebase y tu rol de administrador.';
+    if(el)el.textContent='No se pudo leer el registro ('+(e.code||'error')+'). Para ver usuarios necesitás rol de administrador y reglas publicadas en Firebase.';
   }
 }
 setInterval(updateGreeting,60000);
@@ -421,6 +469,7 @@ async function openDirectLibrary(m){
   view.innerHTML='<button type="button" class="back" onclick="home()">← Volver</button>'+
     '<h2>📚 '+esc(m.name)+'</h2><p id="driveStatus" role="status">Abriendo la biblioteca técnica…</p>';
   const idToken=await activeUser.getIdToken();
+  await recordLibraryVisit('folder',m.folder,m.name,m.name);
   const form=document.createElement('form');
   form.method='POST';form.action=LIBRARY_SERVICE_URL;form.target='_self';
   // El token viaja una sola vez en el cuerpo HTTPS. No se coloca en enlaces ni contraseñas de la APK.
@@ -580,6 +629,7 @@ async function browseDriveFolder(){
   const current=driveTrail[driveTrail.length-1];
   if(!current)return home();
   const id=current.id,version=++driveListVersion;
+  let visitLogged=false;
   if(!/^[A-Za-z0-9_-]+$/.test(id))return;
   driveListing={folderId:id,files:[],query:'',page:0,loading:true};
   view.innerHTML=folderHeader()+'<h2>📁 '+esc(current.name)+'</h2>'+
@@ -600,6 +650,7 @@ async function browseDriveFolder(){
       const response=await driveRequest('https://www.googleapis.com/drive/v3/files?'+search);
       const data=await response.json();
       if(version!==driveListVersion||driveTrail[driveTrail.length-1]?.id!==id||!document.getElementById('driveItems'))return;
+      if(!visitLogged){visitLogged=true;recordLibraryVisit('folder',id,current.name,driveTrail.map(x=>x.name).join(' / '));}
       driveListing.files.push(...(data.files||[]));
       pageToken=data.nextPageToken||'';
       driveListing.loading=!!pageToken;
@@ -619,6 +670,7 @@ async function browseDriveFolder(){
 }
 async function openDriveFile(file){
   driveListVersion++;
+  recordLibraryVisit('file',file.id,file.name,[...driveTrail.map(x=>x.name),file.name].join(' / '));
   const driveLink=driveFileLink(file);
   if(file.mimeType!=='application/pdf'&&!/\.pdf$/i.test(file.name)){
     view.innerHTML=folderHeader()+'<h2>'+esc(file.name)+'</h2>'+
