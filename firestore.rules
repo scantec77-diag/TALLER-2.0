@@ -56,6 +56,22 @@ service cloud.firestore {
         && request.resource.data.accessCount == resource.data.accessCount + 1;
       allow delete: if false;
     }
+    // Tablón compartido: lectura y publicación para cuentas verificadas.
+    match /commonMessages/{messageId} {
+      allow read: if signedIn();
+      allow create: if signedIn()
+        && request.resource.data.keys().hasAll(['authorId','authorName','text','createdAt'])
+        && request.resource.data.keys().hasOnly(['authorId','authorName','text','createdAt'])
+        && request.resource.data.authorId == request.auth.uid
+        && request.resource.data.authorName is string
+        && request.resource.data.authorName.size() > 0
+        && request.resource.data.authorName.size() <= 120
+        && request.resource.data.text is string
+        && request.resource.data.text.size() > 0
+        && request.resource.data.text.size() <= 3000
+        && request.resource.data.createdAt == request.time;
+      allow update, delete: if false;
+    }
     match /roles/{uid} {
       allow read: if owner(uid);
       allow write: if false;
