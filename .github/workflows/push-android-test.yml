@@ -2,6 +2,8 @@ name: Prueba APK Push sin servicios pagos
 on:
   push:
     branches: [feature/push-android-gratis-20261022]
+  pull_request:
+    branches: [apk-prueba-taller-2-0]
   workflow_dispatch:
 
 permissions:
