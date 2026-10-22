@@ -100,36 +100,41 @@ function safeFile_(id) {
 }
 function list_(folderId, cursor) {
   const folder = safeFolder_(folderId);
-  let previous = {};
+  let state = { stage: 'folders', token: '' };
   if (cursor) {
     try {
-      previous = JSON.parse(Utilities.newBlob(Utilities.base64DecodeWebSafe(cursor)).getDataAsString());
-      if (previous.id !== folderId) throw Error('Paginación inválida');
+      state = JSON.parse(Utilities.newBlob(Utilities.base64DecodeWebSafe(cursor)).getDataAsString());
+      if (state.id !== folderId || !['folders', 'files'].includes(state.stage)) throw Error();
     } catch (_) { throw Error('Paginación inválida'); }
   }
-  let folderIterator = previous.folders
-    ? DriveApp.continueFolderIterator(previous.folders) : folder.getFolders();
-  let fileIterator = previous.files
-    ? DriveApp.continueFileIterator(previous.files) : folder.getFiles();
-  // El cursor conserva ambas posiciones y primero muestra subcarpetas.
   const entries = [];
-  while (folderIterator.hasNext() && entries.length < TALLER.pageSize) {
-    const f = folderIterator.next();
-    entries.push({ id: f.getId(), name: f.getName(), mimeType: 'application/vnd.google-apps.folder' });
+  let nextState = null;
+  if (state.stage === 'folders') {
+    const folders = state.token ? DriveApp.continueFolderIterator(state.token) : folder.getFolders();
+    while (folders.hasNext() && entries.length < TALLER.pageSize) {
+      const f = folders.next();
+      entries.push({ id: f.getId(), name: f.getName(), mimeType: 'application/vnd.google-apps.folder' });
+    }
+    if (folders.hasNext()) nextState = { id: folderId, stage: 'folders', token: folders.getContinuationToken() };
   }
-  while (!folderIterator.hasNext() && fileIterator.hasNext() && entries.length < TALLER.pageSize) {
-    const f = fileIterator.next();
-    entries.push({ id: f.getId(), name: f.getName(), mimeType: f.getMimeType(), size: f.getSize() });
+  if (!nextState && entries.length < TALLER.pageSize) {
+    const files = state.stage === 'files' && state.token
+      ? DriveApp.continueFileIterator(state.token) : folder.getFiles();
+    while (files.hasNext() && entries.length < TALLER.pageSize) {
+      const f = files.next();
+      entries.push({ id: f.getId(), name: f.getName(), mimeType: f.getMimeType(), size: f.getSize() });
+    }
+    if (files.hasNext()) nextState = { id: folderId, stage: 'files', token: files.getContinuationToken() };
+  } else if (!nextState && state.stage === 'folders') {
+    // Al llegar justo al límite, continuar con los archivos en la siguiente página.
+    nextState = { id: folderId, stage: 'files', token: '' };
   }
-  let next = '';
-  if (folderIterator.hasNext() || fileIterator.hasNext()) {
-    next = Utilities.base64EncodeWebSafe(JSON.stringify({
-      id: folderId,
-      folders: folderIterator.hasNext() ? folderIterator.getContinuationToken() : '',
-      files: fileIterator.hasNext() ? fileIterator.getContinuationToken() : ''
-    }));
-  }
-  return { folderId: folderId, files: entries, nextPageToken: next };
+  return {
+    folderId: folderId,
+    files: entries,
+    nextPageToken: nextState
+      ? Utilities.base64EncodeWebSafe(JSON.stringify(nextState)) : ''
+  };
 }
 
 function chunk_(fileId, offset) {
