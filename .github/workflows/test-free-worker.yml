@@ -1,0 +1,23 @@
+name: Revisar Worker gratuito
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'cloudflare-push-worker/**'
+      - '.github/workflows/test-free-worker.yml'
+  push:
+    branches: [feature/push-web-gratis-20261022]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  node-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Probar Worker sin secretos ni facturación
+        working-directory: cloudflare-push-worker
+        run: npm test

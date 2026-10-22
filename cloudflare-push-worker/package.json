@@ -1,0 +1,1 @@
+{"name":"taller20-worker-push","private":true,"type":"module","scripts":{"test":"node --check src/index.js && node test.mjs"}}

@@ -1,0 +1,8 @@
+name = "taller20-common-push"
+main = "src/index.js"
+compatibility_date = "2026-10-22"
+workers_dev = true
+
+# Usar SOLO Workers Free. No activar Workers Paid.
+# El secreto FIREBASE_SERVICE_ACCOUNT_JSON se carga con wrangler secret put,
+# NUNCA se agrega a GitHub ni se incluye en esta configuración.
