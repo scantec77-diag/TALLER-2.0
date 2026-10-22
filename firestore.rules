@@ -28,6 +28,34 @@ service cloud.firestore {
       allow create: if owner(uid) && request.resource.data.keys().hasOnly(['displayName','preferences','createdAt']);
       allow update: if owner(uid) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['displayName','preferences']);
     }
+
+    // Cada persona registra solo sus propios accesos.
+    // El administrador puede consultar los contadores de todos los usuarios.
+    function accessAdmin() {
+      return signedIn()
+        && exists(/databases/$(database)/documents/roles/$(request.auth.uid))
+        && get(/databases/$(database)/documents/roles/$(request.auth.uid)).data.role == 'admin';
+    }
+    function validAccessStats() {
+      return request.resource.data.keys().hasOnly(['email','displayName','accessCount','lastAccess'])
+        && request.resource.data.keys().hasAll(['email','displayName','accessCount','lastAccess'])
+        && request.resource.data.email is string
+        && request.resource.data.email == request.auth.token.email
+        && request.resource.data.displayName is string
+        && request.resource.data.displayName.size() <= 120
+        && request.resource.data.accessCount is int
+        && request.resource.data.lastAccess == request.time;
+    }
+    match /accessStats/{uid} {
+      allow get: if owner(uid) || accessAdmin();
+      allow list: if accessAdmin();
+      allow create: if owner(uid) && validAccessStats()
+        && request.resource.data.accessCount == 1;
+      allow update: if owner(uid) && validAccessStats()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['email','displayName','accessCount','lastAccess'])
+        && request.resource.data.accessCount == resource.data.accessCount + 1;
+      allow delete: if false;
+    }
     match /roles/{uid} {
       allow read: if owner(uid);
       allow write: if false;
