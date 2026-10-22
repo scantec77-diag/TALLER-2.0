@@ -1,0 +1,59 @@
+name: Publicar Taller 2.0
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'index.html'
+      - 'assets/**'
+      - 'firebase-config.js'
+      - 'firebase-messaging-sw.js'
+      - 'push-config.js'
+      - 'push-notifications.js'
+      - '.github/workflows/publicar-taller.yml'
+  workflow_dispatch:
+  # Respaldo para cambios que llegan desde integraciones sin generar un push event.
+  schedule:
+    - cron: '17 * * * *'
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: taller-2-0-pages
+  cancel-in-progress: false
+
+jobs:
+  publicar:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Obtener versión actual
+        uses: actions/checkout@v4
+
+      - name: Preparar GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Preparar archivos web
+        shell: bash
+        run: |
+          mkdir -p _site/assets
+          cp index.html firebase-config.js firebase-messaging-sw.js push-config.js push-notifications.js _site/
+          cp -R assets/. _site/assets/
+          touch _site/.nojekyll
+          test -f _site/index.html
+          grep -q 'card-sisu' _site/index.html
+
+      - name: Cargar sitio
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: _site
+
+      - name: Publicar sitio
+        id: deployment
+        uses: actions/deploy-pages@v4
