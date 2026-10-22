@@ -19,8 +19,11 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
-      - name: Preparar Android
-        uses: android-actions/setup-android@v3
+      - name: Comprobar Android SDK
+        run: |
+          echo "ANDROID_HOME=${ANDROID_HOME:-/usr/local/lib/android/sdk}" >> "$GITHUB_ENV"
+          echo "sdkmanager disponible: $(command -v sdkmanager || true)"
+          ls -d /usr/local/lib/android/sdk/platforms/* || true
       - name: Preparar Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
