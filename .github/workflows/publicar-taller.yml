@@ -4,14 +4,6 @@ on:
   push:
     branches:
       - main
-    paths:
-      - 'index.html'
-      - 'assets/**'
-      - 'firebase-config.js'
-      - 'firebase-messaging-sw.js'
-      - 'push-config.js'
-      - 'push-notifications.js'
-      - '.github/workflows/publicar-taller.yml'
   workflow_dispatch:
   # Respaldo para cambios que llegan desde integraciones sin generar un push event.
   schedule:
