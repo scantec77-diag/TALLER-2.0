@@ -1,0 +1,25 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'ar.scantec.taller20'
+    compileSdk 35
+
+    defaultConfig {
+        applicationId 'ar.scantec.taller20'
+        minSdk 24
+        targetSdk 35
+        versionCode 1
+        versionName '2.0.0-prueba1'
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
+
+dependencies {
+    implementation 'androidx.browser:browser:1.8.0'
+}

@@ -1,0 +1,49 @@
+name: Compilar APK de prueba - Taller 2.0
+on:
+  push:
+    branches:
+      - apk-prueba-taller-2-0
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Descargar proyecto
+        uses: actions/checkout@v4
+      - name: Preparar Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Preparar Android
+        uses: android-actions/setup-android@v3
+      - name: Preparar Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.10.2'
+      - name: Compilar APK de prueba firmada con clave debug
+        run: gradle --no-daemon :app:assembleDebug
+      - name: Preparar instalador
+        run: |
+          mkdir -p dist
+          cp app/build/outputs/apk/debug/app-debug.apk dist/Taller-2.0-Prueba.apk
+      - name: Publicar artefacto descargable
+        uses: actions/upload-artifact@v4
+        with:
+          name: Taller-2.0-Prueba-Android
+          path: dist/Taller-2.0-Prueba.apk
+          retention-days: 30
+      - name: Publicar versión de prueba en GitHub Releases
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="taller-2.0-apk-prueba-v1"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" dist/Taller-2.0-Prueba.apk --clobber
+          else
+            gh release create "$TAG" dist/Taller-2.0-Prueba.apk --target "$GITHUB_SHA" --title "Taller 2.0 - APK de prueba" --prerelease --notes "APK de prueba para Android. Abre la versión web de Taller 2.0 en una pestaña segura de Chrome. Requiere Internet y Chrome u otro navegador compatible. Firmada con clave de depuración, no es una versión de producción."
+          fi
