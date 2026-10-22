@@ -9,6 +9,7 @@ import { getAuth, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, linkW
 import { getFirestore, doc, getDoc, setDoc, collection, getDocs, increment, serverTimestamp, addDoc, query, orderBy, limit, startAfter, onSnapshot } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js';
 import { firebaseConfig } from './firebase-config.js';
 import { showPushSettings, refreshPushRegistration, forgetPushRegistration } from './push-notifications.js';
+import { PUSH_DISPATCH_URL } from './push-dispatch-config.js';
 const app=initializeApp(firebaseConfig),auth=getAuth(app),db=getFirestore(app);
 const driveApp=initializeApp(firebaseConfig,'taller20-drive-reader'),driveAuth=getAuth(driveApp);
 const DEFAULT_DRIVE_EMAIL='manuales.taller.exolgan@gmail.com';
@@ -201,6 +202,28 @@ function startCommonNotifications(user){
   );
 }
 
+async function notifyNewCommonMessage(user, messageId) {
+  // No se envía push mientras la URL del Worker no esté activada.
+  if (!PUSH_DISPATCH_URL || !/^https:\/\//.test(PUSH_DISPATCH_URL)) return null;
+  try {
+    const idToken = await user.getIdToken();
+    const response = await fetch(PUSH_DISPATCH_URL, {
+      method:'POST',
+      headers:{'Content-Type':'application/json','Authorization':'Bearer '+idToken},
+      body:JSON.stringify({messageId}),
+      signal:AbortSignal.timeout(8000)
+    });
+    if (!response.ok) {
+      console.warn('El mensaje se guardó, pero el servidor de avisos devolvió', response.status);
+      return false;
+    }
+    return true;
+  } catch (error) {
+    console.warn('No se pudo enviar el aviso del Espacio Común:',error.message);
+    return false;
+  }
+}
+
 function commonSpace(){
   if(!activeUser)return;
   const user=activeUser;
@@ -244,7 +267,7 @@ function commonSpace(){
     send.disabled=true;input.disabled=true;sendStatus.textContent='Publicando...';
     try{
       const profile=user.providerData?.find(p=>p.providerId==='google.com');
-      await addDoc(collection(db,'commonMessages'),{
+      const saved=await addDoc(collection(db,'commonMessages'),{
         authorId:user.uid,
         authorName:String(profile?.displayName||user.displayName||'Usuario').trim().slice(0,120)||'Usuario',
         text,createdAt:serverTimestamp()
@@ -252,6 +275,9 @@ function commonSpace(){
       if(!current())return;
       input.value='';sendStatus.textContent='Mensaje publicado ✓';
       await loadMessages();
+      // El mensaje no depende del envío push: nunca perder una publicación.
+      const sent=await notifyNewCommonMessage(user,saved.id);
+      if(current()&&sent===false)sendStatus.textContent='Mensaje publicado; el aviso del celular no pudo enviarse.';
     }catch(e){if(current())sendStatus.textContent=explain(e)+' Tu texto sigue en el cuadro.'}
     finally{if(current()){send.disabled=false;input.disabled=false}}
   };
