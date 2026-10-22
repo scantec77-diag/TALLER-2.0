@@ -8,7 +8,7 @@ import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.14.1/fireba
 import { getAuth, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, linkWithPopup, reauthenticateWithPopup, signOut } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js';
 import { getFirestore, doc, getDoc, setDoc, collection, getDocs, increment, serverTimestamp, addDoc, query, orderBy, limit, startAfter, onSnapshot } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js';
 import { firebaseConfig } from './firebase-config.js';
-import { showPushSettings, refreshPushRegistration } from './push-notifications.js';
+import { showPushSettings, refreshPushRegistration, forgetPushRegistration } from './push-notifications.js';
 const app=initializeApp(firebaseConfig),auth=getAuth(app),db=getFirestore(app);
 const driveApp=initializeApp(firebaseConfig,'taller20-drive-reader'),driveAuth=getAuth(driveApp);
 const DEFAULT_DRIVE_EMAIL='manuales.taller.exolgan@gmail.com';
@@ -134,7 +134,7 @@ onAuthStateChanged(auth,async user=>{
     isAdmin=!!role&&role.exists()&&role.data().role==='admin';
     authBox.innerHTML='<p id="userWelcome" class="welcome-line"></p><p class="session-line">Sesión: '+esc(user.email||'Cuenta de Google')+' <button class="settings" id="logout" type="button">Cerrar sesión</button></p>';
     updateGreeting();
-    document.getElementById('logout').onclick=()=>{forgetAccessSession();return signOut(auth)};
+    document.getElementById('logout').onclick=async()=>{forgetAccessSession();await forgetPushRegistration({app,db,user}).catch(e=>console.warn('No se pudo cancelar el registro push:',e.message));return signOut(auth)};
     home();
     if(location.hash==='#espacio-comun') commonSpace();
     recordAccess(user);
