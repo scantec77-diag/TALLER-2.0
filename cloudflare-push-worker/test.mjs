@@ -1,0 +1,14 @@
+import assert from 'node:assert/strict';
+import worker from './src/index.js';
+const goodOrigin='https://scantec77-diag.github.io';
+const base='https://taller20-common-push.example.workers.dev/notify';
+let r=await worker.fetch(new Request(base,{method:'POST',headers:{Origin:'https://example.com'}}),{});
+assert.equal(r.status,403);
+r=await worker.fetch(new Request(base,{method:'OPTIONS',headers:{Origin:goodOrigin}}),{});
+assert.equal(r.status,204);
+assert.equal(r.headers.get('Access-Control-Allow-Origin'),goodOrigin);
+r=await worker.fetch(new Request(base,{method:'POST',headers:{Origin:goodOrigin}}),{});
+assert.equal(r.status,401);
+r=await worker.fetch(new Request('https://taller20-common-push.example.workers.dev/unknown',{method:'GET',headers:{Origin:goodOrigin}}),{});
+assert.equal(r.status,404);
+console.log('OK: rutas, autorización y CORS sin credenciales ni despliegue.');
