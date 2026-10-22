@@ -16,6 +16,7 @@ a{color:#a8d6ff}#results{max-width:100%}
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 </head><body>
+<p><a href="https://scantec77-diag.github.io/TALLER-2.0/">← Volver a Taller 2.0</a></p>
 <h2>📚 Biblioteca técnica</h2>
 <p id="status" role="status">Conectando de forma segura con Taller 2.0…</p>
 <div id="path"></div>
@@ -26,26 +27,18 @@ a{color:#a8d6ff}#results{max-width:100%}
 <div id="preview"></div>
 <script>
 'use strict';
-const PARENT_ORIGIN='https://scantec77-diag.github.io';
-const ROOT_FOLDER_ID='11cVCcyrGyjp17oqkjZ5uS93PqstprZ9Y';
+// Sesión temporal validada en servidor; no se comparte la cuenta de Google de manuales.
+const librarySession=<?!= sessionJson ?>;
+const ROOT_FOLDER_ID=<?!= folderJson ?>;
+const START_NAME=<?!= folderNameJson ?>;
 const LIMIT=80,PDF_WORKER='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-let idToken='',trail=[],files=[],search='',page=0,busy=false,operation=0,pdfObjectUrl=null;
+let trail=[{id:ROOT_FOLDER_ID,name:START_NAME}],files=[],search='',page=0,busy=false,operation=0,pdfObjectUrl=null;
 const $=id=>document.getElementById(id);
 function status(s){$('status').textContent=String(s)}
 function gs(name,...args){return new Promise((resolve,reject)=>{
   google.script.run.withSuccessHandler(resolve).withFailureHandler(reject)[name](...args)
 })}
 function errorString(e){return e?.message||String(e)||'Error desconocido'}
-window.addEventListener('message',e=>{
-  if(e.origin!==PARENT_ORIGIN||!e.data||e.data.type!=='taller20-library-init')return;
-  if(typeof e.data.idToken!=='string'||!e.data.idToken)return;
-  idToken=e.data.idToken;
-  const folder=String(e.data.folderId||ROOT_FOLDER_ID);
-  const name=String(e.data.folderName||'Biblioteca');
-  trail=[{id:folder,name}];
-  browse();
-});
-window.parent.postMessage({type:'taller20-library-ready'},PARENT_ORIGIN);
 function showTrail(){
   const wrap=$('path');wrap.replaceChildren();
   trail.forEach((entry,i)=>{
@@ -89,7 +82,7 @@ async function browse(){
   let next='';
   try{
     do{
-      const result=await gs('listarCarpeta',idToken,folder.id,next);
+      const result=await gs('listarCarpeta',librarySession,folder.id,next);
       if(version!==operation)return;
       files.push(...(result.files||[]));
       next=result.nextPageToken||'';
@@ -101,12 +94,12 @@ async function browse(){
 }
 function releasePdf(){if(pdfObjectUrl){URL.revokeObjectURL(pdfObjectUrl);pdfObjectUrl=null}}
 async function downloadData(file,version){
-  const meta=await gs('infoArchivo',idToken,file.id);
+  const meta=await gs('infoArchivo',librarySession,file.id);
   if(meta.size<=0)throw Error('Este documento no se puede descargar directamente.');
   let offset=0;const parts=[];
   while(offset<meta.size){
     if(version!==operation)throw Error('Descarga cancelada.');
-    const r=await gs('bloqueArchivo',idToken,file.id,offset);
+    const r=await gs('bloqueArchivo',librarySession,file.id,offset);
     if(!r.length||r.start!==offset)throw Error('Error en una parte del archivo.');
     const raw=atob(r.base64),bytes=new Uint8Array(raw.length);
     for(let i=0;i<raw.length;i++)bytes[i]=raw.charCodeAt(i);
@@ -175,4 +168,5 @@ async function openFile(file){
   }catch(e){if(version===operation)status('No se pudo abrir el archivo: '+errorString(e))}
 }
 $('search').addEventListener('input',paintFiles);
+browse();
 </script></body></html>
