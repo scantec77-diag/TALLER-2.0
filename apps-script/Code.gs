@@ -140,3 +140,22 @@ function bloqueArchivo(session,fileId,start){
   if(bytes.length>MAX_CHUNK_)throw Error('Bloque demasiado grande.');
   return {base64:Utilities.base64Encode(bytes),start:offset,length:bytes.length,size:size};
 }
+
+
+// Vista PDF de documentos nativos de Google sin enviar al usuario a Drive.
+function exportarDocumentoPDF(session,fileId){
+  validSession_(session);
+  const file=allowedFile_(fileId,false);
+  const tipos={
+    'application/vnd.google-apps.document':true,
+    'application/vnd.google-apps.spreadsheet':true,
+    'application/vnd.google-apps.presentation':true
+  };
+  if(!tipos[file.mimeType])throw Error('No se admite exportar este formato como PDF.');
+  const url='files/'+encodeURIComponent(fileId)+'/export?mimeType='+encodeURIComponent('application/pdf');
+  const response=driveApi_(url);
+  if(response.getResponseCode()!==200)throw Error('No se pudo generar el PDF ('+response.getResponseCode()+').');
+  const data=response.getContent();
+  if(data.length>7*1024*1024)throw Error('El documento supera el tamaño admitido para conversión directa.');
+  return {name:file.name+'.pdf',mimeType:'application/pdf',size:data.length,base64:Utilities.base64Encode(data)};
+}
