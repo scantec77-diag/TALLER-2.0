@@ -56,8 +56,13 @@ public final class MainActivity extends Activity {
         openTaller();
     }
 
+    private static boolean isCommonNotification(Intent intent) {
+        return intent != null && (intent.getBooleanExtra("open_common", false) ||
+            "common-message".equals(intent.getStringExtra("type")));
+    }
+
     private void openTaller() {
-        Uri url = Uri.parse(SITE + (getIntent() != null && getIntent().getBooleanExtra("open_common", false)
+        Uri url = Uri.parse(SITE + (isCommonNotification(getIntent())
             ? "#espacio-comun" : ""));
         try {
             CustomTabsIntent customTab = new CustomTabsIntent.Builder()
@@ -83,7 +88,7 @@ public final class MainActivity extends Activity {
     @Override protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
         setIntent(intent);
-        if (intent != null && intent.getBooleanExtra("open_common", false)) openTaller();
+        if (isCommonNotification(intent)) openTaller();
     }
 
     @Override protected void onPause() {
