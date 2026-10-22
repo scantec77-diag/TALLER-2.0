@@ -17,7 +17,7 @@ messaging.onBackgroundMessage(payload => {
   const title = '💬 ' + name + ' escribió en ESPACIO COMÚN';
   const body = String(data.preview || 'Hay un mensaje nuevo en Taller 2.0').slice(0, 160);
   const url = new URL('./index.html#espacio-comun', self.registration.scope).href;
-  self.registration.showNotification(title, {
+  return self.registration.showNotification(title, {
     body, tag: 'taller20-common-' + String(data.messageId || '').slice(0, 128),
     icon: undefined, badge: undefined, data: { url }
   });
@@ -28,7 +28,7 @@ self.addEventListener('notificationclick', event => {
   event.waitUntil((async () => {
     const clientsList = await clients.matchAll({ type: 'window', includeUncontrolled: true });
     for (const client of clientsList) {
-      if (new URL(client.url).origin === new URL(url).origin && 'focus' in client) {
+      if (client.url.startsWith(self.registration.scope) && 'focus' in client) {
         await client.navigate(url);
         return client.focus();
       }

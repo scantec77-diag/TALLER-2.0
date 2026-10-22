@@ -28,6 +28,9 @@ jobs:
       - name: Obtener versión actual
         uses: actions/checkout@v4
 
+      - name: Comprobar código y regresiones
+        run: node --test tests/review.test.cjs
+
       - name: Preparar GitHub Pages
         uses: actions/configure-pages@v5
 

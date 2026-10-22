@@ -25,7 +25,7 @@ function doPost(e){
     const t=HtmlService.createTemplateFromFile('Biblioteca');
     t.sessionJson=JSON.stringify(session);
     t.folderJson=JSON.stringify(folder);
-    t.folderNameJson=JSON.stringify(info.name||'Biblioteca');
+    t.folderNameJson=JSON.stringify(info.name||'Biblioteca').replace(/</g,'\\u003c');
     return t.evaluate().setTitle('Taller 2.0 · Biblioteca');
   }catch(err){
     return HtmlService.createHtmlOutput('<h3>Acceso a la biblioteca no autorizado</h3>'+

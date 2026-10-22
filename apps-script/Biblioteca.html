@@ -104,6 +104,7 @@ async function downloadData(file,version){
     const raw=atob(r.base64),bytes=new Uint8Array(raw.length);
     for(let i=0;i<raw.length;i++)bytes[i]=raw.charCodeAt(i);
     parts.push(bytes);offset+=bytes.length;
+    if(version!==operation)throw Error('Descarga cancelada.');
     status('Descargando '+meta.name+'… '+Math.floor(offset/meta.size*100)+'%');
   }
   return {meta,blob:new Blob(parts,{type:meta.mimeType||'application/octet-stream'})};
@@ -139,7 +140,7 @@ async function openFile(file){
       status('Abriendo PDF en el visor del navegador…');return;
     }
     pdfjsLib.GlobalWorkerOptions.workerSrc=PDF_WORKER;
-    const pdf=await pdfjsLib.getDocument({url:pdfObjectUrl}).promise;
+    const pdf=await pdfjsLib.getDocument({url:pdfObjectUrl,isEvalSupported:false}).promise;
     if(version!==operation)return;
     const bar=document.createElement('div');bar.className='toolbar';
     const prev=document.createElement('button');prev.textContent='← Anterior';
@@ -148,8 +149,11 @@ async function openFile(file){
     bar.append(prev,number,next);panel.append(bar);
     const canvas=document.createElement('canvas');canvas.id='pdfCanvas';panel.append(canvas);
     const ctx=canvas.getContext('2d');
-    let current=1,renderNumber=0;
+    let current=1,renderNumber=0,rendering=false;
     const render=async()=>{
+      if(rendering||version!==operation)return;
+      rendering=true;
+      try{
       const seq=++renderNumber;status('Mostrando página '+current+'…');
       const p=await pdf.getPage(current);
       if(version!==operation||seq!==renderNumber)return;
@@ -165,9 +169,11 @@ async function openFile(file){
       number.textContent='Página '+current+' de '+pdf.numPages;
       prev.disabled=current===1;next.disabled=current===pdf.numPages;
       status('PDF cargado ✓');
+      }catch(e){if(version===operation)status('No se pudo mostrar la página: '+errorString(e))}
+      finally{rendering=false}
     };
-    prev.onclick=()=>{if(current>1){current--;render()}};
-    next.onclick=()=>{if(current<pdf.numPages){current++;render()}};
+    prev.onclick=()=>{if(!rendering&&current>1){current--;render()}};
+    next.onclick=()=>{if(!rendering&&current<pdf.numPages){current++;render()}};
     await render();
   }catch(e){if(version===operation)status('No se pudo abrir el archivo: '+errorString(e)+'. Volvé a la biblioteca para elegir otro documento.')}
 }

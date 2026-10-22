@@ -50,7 +50,7 @@ const DEFAULT_DRIVE_EMAIL='manuales.taller.exolgan@gmail.com';
 const LIBRARY_SERVICE_URL='https://script.google.com/macros/s/AKfycbzPf-zrdvBwb6jxxTAmI6vdqQO8mkpJf1324NuIYFpBgwZS5kbHE1G2zdZDEihZPXUh/exec';
 const DIRECT_LIB_DEFAULT=false;
 const DIRECT_LIB_FLAG='taller20_direct_library_test';
-const useDirectLibrary=()=>DIRECT_LIB_DEFAULT||localStorage.getItem(DIRECT_LIB_FLAG)==='1';
+const useDirectLibrary=()=>{try{return DIRECT_LIB_DEFAULT||(isAdmin&&localStorage.getItem(DIRECT_LIB_FLAG)==='1')}catch(e){return DIRECT_LIB_DEFAULT}};
 let activeUser=null,isAdmin=false,driveAccessToken=null,driveTokenExpiry=0,driveTrail=[],currentMachineIndex=null,pdfObjectUrl=null,driveOwnerEmail=DEFAULT_DRIVE_EMAIL;
 // La cuenta de origen se fija en el código. El correo no otorga permisos de Drive.
 async function rememberDriveEmail(email){
@@ -335,10 +335,19 @@ onAuthStateChanged(auth,async user=>{
     document.getElementById('view').innerHTML='';
   }
 });
-const KEY="taller20_config_v1";let config=JSON.parse(localStorage.getItem(KEY)||'{"root":"11cVCcyrGyjp17oqkjZ5uS93PqstprZ9Y","machines":[]}');if(!config.root)config.root="11cVCcyrGyjp17oqkjZ5uS93PqstprZ9Y";const DRIVE_MACHINES=[{"name":"CONTAINERAS VIEJAS","folder":"1a_L4HR_McfGmnCuTXbgrZlf0xvSuxGPW"},{"name":"GOVERNOR","folder":"1k-WM5uNZb88MNCpKsS7rRffqXoi-8ar1"},{"name":"HYSTER","folder":"1FOgvdSfJZ9AlsTml2I1yU0ROJhcKXSCI"},{"name":"INFO","folder":"1VeBO1uH2mimy2PEJ07gCOpLQY0t2xGg_"},{"name":"INTA","folder":"1iYlZDsIFLqoTXFmrjkkj7StDnnzHhjLJ"},{"name":"KALMAR","folder":"1yZrf4vj5ZHLFkCZjklJ7ly0t38FVNKCK"},{"name":"KONECRANES","folder":"1Js5uk-b2RtAfM18PWFg6qZ4U8Rpb6ob5"},{"name":"LIEBHERR","folder":"1kBoSAqAeIpI3UtHOWWGN8t82cGAZYu-o"},{"name":"LINDE","folder":"17MpMCCTBXCTsANG_UkbEqTZR5pnhPAKf"},{"name":"masterdrive","folder":"1UXMehucxz8AcqfUweE6is2JrBXJNHNxT"},{"name":"noel","folder":"1SUGcDxSE3rIjPaL-p_f7PVC_EsuMFqVe"},{"name":"P02","folder":"1ypQvrsJTftXJE2vUytiSSeISsZ1wsum3"},{"name":"P03","folder":"1_SvG_J2lHT51yYcvT7jWaC4-7yDiEDC_"},{"name":"P04","folder":"1UvnD1-CKrpfxIxJOtvLcNWXj-YXYq39K"},{"name":"P05","folder":"1rIW1383BZGvr3mPVHZjk0vI0qKjud3cg"},{"name":"P06","folder":"1HpC1AdxIOsrNlmQXtzWlJU2U2fG3y14G"},{"name":"P07","folder":"1LAz3z1gHZ90t4VTe9mv4n4vGdGxVGSQD"},{"name":"P08","folder":"1Bq3vlwACX7VVDtstffS6wVwTRvrSzFPj"},{"name":"P09","folder":"1MvUKcXfyEIZR06CCLIIYZWyo7Bz63gKi"},{"name":"P10","folder":"1BM7t2Zha9B0nwYgnYQleO2JV2vrBN1PP"},{"name":"PACECO","folder":"1AX5tDnkEXyZyzhW4IwLhSxOn7n_oRTpT"},{"name":"S7","folder":"1zIMmDXgjZV-R-TUQwFzsqmTM9zNEIPfw"},{"name":"SISU","folder":"1DMljuYrC-amjtpbqaLIaEgKtMV7qd8Yz"}];for(const m of DRIVE_MACHINES){if(!config.machines.some(x=>x.folder===m.folder))config.machines.push(m)}localStorage.setItem(KEY,JSON.stringify(config));const view=document.getElementById('view');
+const KEY="taller20_config_v1";
+function readConfig(){
+  let saved={};
+  try{saved=JSON.parse(localStorage.getItem(KEY)||'{}')||{}}catch(e){console.warn('Se recuperó la configuración local.');}
+  return {root:typeof saved.root==='string'&&saved.root?saved.root:'11cVCcyrGyjp17oqkjZ5uS93PqstprZ9Y',
+    machines:Array.isArray(saved.machines)?saved.machines.filter(m=>m&&typeof m.name==='string'&&typeof m.folder==='string'):[],
+    removed:Array.isArray(saved.removed)?saved.removed.filter(x=>typeof x==='string'):[]};
+}
+let config=readConfig();
+const DRIVE_MACHINES=[{"name":"CONTAINERAS VIEJAS","folder":"1a_L4HR_McfGmnCuTXbgrZlf0xvSuxGPW"},{"name":"GOVERNOR","folder":"1k-WM5uNZb88MNCpKsS7rRffqXoi-8ar1"},{"name":"HYSTER","folder":"1FOgvdSfJZ9AlsTml2I1yU0ROJhcKXSCI"},{"name":"INFO","folder":"1VeBO1uH2mimy2PEJ07gCOpLQY0t2xGg_"},{"name":"INTA","folder":"1iYlZDsIFLqoTXFmrjkkj7StDnnzHhjLJ"},{"name":"KALMAR","folder":"1yZrf4vj5ZHLFkCZjklJ7ly0t38FVNKCK"},{"name":"KONECRANES","folder":"1Js5uk-b2RtAfM18PWFg6qZ4U8Rpb6ob5"},{"name":"LIEBHERR","folder":"1kBoSAqAeIpI3UtHOWWGN8t82cGAZYu-o"},{"name":"LINDE","folder":"17MpMCCTBXCTsANG_UkbEqTZR5pnhPAKf"},{"name":"masterdrive","folder":"1UXMehucxz8AcqfUweE6is2JrBXJNHNxT"},{"name":"noel","folder":"1SUGcDxSE3rIjPaL-p_f7PVC_EsuMFqVe"},{"name":"P02","folder":"1ypQvrsJTftXJE2vUytiSSeISsZ1wsum3"},{"name":"P03","folder":"1_SvG_J2lHT51yYcvT7jWaC4-7yDiEDC_"},{"name":"P04","folder":"1UvnD1-CKrpfxIxJOtvLcNWXj-YXYq39K"},{"name":"P05","folder":"1rIW1383BZGvr3mPVHZjk0vI0qKjud3cg"},{"name":"P06","folder":"1HpC1AdxIOsrNlmQXtzWlJU2U2fG3y14G"},{"name":"P07","folder":"1LAz3z1gHZ90t4VTe9mv4n4vGdGxVGSQD"},{"name":"P08","folder":"1Bq3vlwACX7VVDtstffS6wVwTRvrSzFPj"},{"name":"P09","folder":"1MvUKcXfyEIZR06CCLIIYZWyo7Bz63gKi"},{"name":"P10","folder":"1BM7t2Zha9B0nwYgnYQleO2JV2vrBN1PP"},{"name":"PACECO","folder":"1AX5tDnkEXyZyzhW4IwLhSxOn7n_oRTpT"},{"name":"S7","folder":"1zIMmDXgjZV-R-TUQwFzsqmTM9zNEIPfw"},{"name":"SISU","folder":"1DMljuYrC-amjtpbqaLIaEgKtMV7qd8Yz"}];for(const m of DRIVE_MACHINES){if(!config.removed.includes(m.folder)&&!config.machines.some(x=>x.folder===m.folder))config.machines.push(m)}persist();const view=document.getElementById('view');
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 function folderId(value){const m=String(value).match(/\/folders\/([\w-]+)/);return m?m[1]:String(value).trim()}function folderUrl(id){const url='https://drive.google.com/drive/folders/'+encodeURIComponent(id);const email=driveOwnerEmail||activeUser?.email;return email?url+'?authuser='+encodeURIComponent(email):url}
-const NOTES_KEY="taller20_notas_v1";async function notes(){if(!activeUser)return;const noteRef=doc(db,'users',activeUser.uid,'notes','personal');let value='';try{const snap=await getDoc(noteRef);value=snap.exists()?snap.data().content||'':''}catch(e){alert('No se pudieron cargar tus notas');return}view.innerHTML='<button class="back" onclick="home()">← Volver</button><h2>📝 Mi espacio</h2><p>Tu bloc de notas personal. Se guarda en tu cuenta privada.</p><textarea id="myNotes" placeholder="Anotá tareas, observaciones, recordatorios..." style="width:100%;min-height:320px;resize:vertical;padding:14px;border-radius:10px;background:#122237;color:white;border:1px solid #526a84;font:inherit"></textarea><p id="noteStatus">Los cambios se guardan automáticamente.</p>';const el=document.getElementById("myNotes");el.value=value;el.addEventListener("input",()=>{clearTimeout(window.noteTimer);window.noteTimer=setTimeout(async()=>{try{await setDoc(noteRef,{content:el.value,updatedAt:new Date().toISOString()});document.getElementById("noteStatus").textContent="Guardado en tu espacio privado ✓"}catch(e){document.getElementById("noteStatus").textContent="Error al guardar; revisá tu conexión"}},650)})}
+const NOTES_KEY="taller20_notas_v1";async function notes(){if(!activeUser)return;const noteUser=activeUser.uid;const noteRef=doc(db,'users',activeUser.uid,'notes','personal');let value='';try{const snap=await getDoc(noteRef);value=snap.exists()?snap.data().content||'':''}catch(e){alert('No se pudieron cargar tus notas');return}if(activeUser?.uid!==noteUser)return;view.innerHTML='<button class="back" onclick="home()">← Volver</button><h2>📝 Mi espacio</h2><p>Tu bloc de notas personal. Se guarda en tu cuenta privada.</p><textarea id="myNotes" placeholder="Anotá tareas, observaciones, recordatorios..." style="width:100%;min-height:320px;resize:vertical;padding:14px;border-radius:10px;background:#122237;color:white;border:1px solid #526a84;font:inherit"></textarea><p id="noteStatus">Los cambios se guardan automáticamente.</p>';const el=document.getElementById("myNotes"),noteStatus=document.getElementById("noteStatus");el.value=value;el.addEventListener("input",()=>{clearTimeout(window.noteTimer);window.noteTimer=setTimeout(async()=>{if(activeUser?.uid!==noteUser)return;try{await setDoc(noteRef,{content:el.value,updatedAt:new Date().toISOString()});noteStatus.textContent="Guardado en tu espacio privado ✓"}catch(e){noteStatus.textContent="Error al guardar; revisá tu conexión"}},650)})}
 
 let stopCommonNotifications=null;
 function clearCommonNotifications(){
@@ -455,6 +464,7 @@ function pushSettings(){
 }
 function home(){
  if(!activeUser)return;
+ driveListVersion++;currentMachineIndex=null;clearPdfPreview();
  view.innerHTML='<button class="settings" onclick="notes()">📝 Mi espacio</button><button class="settings" onclick="commonSpace()">💬 ESPACIO COMUN</button><button class="settings" onclick="pushSettings()">🔔 Notificaciones</button>'+
   (isAdmin?'<button class="settings" onclick="settings()">⚙️ Configuración</button><button class="settings" onclick="manageConnection()">🔗 Gestionar conexión</button><button class="settings" onclick="accessDashboard()">👥 Accesos</button>':'')+
   '<h2>Máquinas</h2><div class="grid">'+
@@ -468,8 +478,11 @@ async function openDirectLibrary(m){
     throw Error('El servicio seguro de la biblioteca todavía no está configurado.');
   view.innerHTML='<button type="button" class="back" onclick="home()">← Volver</button>'+
     '<h2>📚 '+esc(m.name)+'</h2><p id="driveStatus" role="status">Abriendo la biblioteca técnica…</p>';
-  const idToken=await activeUser.getIdToken();
+  const user=activeUser,screen=document.getElementById('driveStatus');
+  const idToken=await user.getIdToken();
+  if(activeUser?.uid!==user.uid||!screen?.isConnected)return;
   await recordLibraryVisit('folder',m.folder,m.name,m.name);
+  if(activeUser?.uid!==user.uid||!screen?.isConnected)return;
   const form=document.createElement('form');
   form.method='POST';form.action=LIBRARY_SERVICE_URL;form.target='_self';
   // El token viaja una sola vez en el cuerpo HTTPS. No se coloca en enlaces ni contraseñas de la APK.
@@ -669,7 +682,8 @@ async function browseDriveFolder(){
   }
 }
 async function openDriveFile(file){
-  driveListVersion++;
+  const version=++driveListVersion;
+  clearPdfPreview();
   recordLibraryVisit('file',file.id,file.name,[...driveTrail.map(x=>x.name),file.name].join(' / '));
   const driveLink=driveFileLink(file);
   if(file.mimeType!=='application/pdf'&&!/\.pdf$/i.test(file.name)){
@@ -682,9 +696,12 @@ async function openDriveFile(file){
     '<p id="pdfStatus" role="status">Cargando PDF…</p>'+
     '<p><a target="_blank" rel="noopener" href="'+driveLink+'">Abrir en Google Drive ↗</a></p>';
   bindTrailButtons();
+  const originalStatus=document.getElementById('pdfStatus');
+  const current=()=>version===driveListVersion&&originalStatus?.isConnected&&!!activeUser;
   try{
     const response=await driveRequest('https://www.googleapis.com/drive/v3/files/'+encodeURIComponent(file.id)+'?alt=media');
     const blob=await response.blob();
+    if(!current())return;
     clearPdfPreview();
     pdfObjectUrl=URL.createObjectURL(new Blob([blob],{type:'application/pdf'}));
     const status=document.getElementById('pdfStatus');
@@ -699,9 +716,9 @@ async function openDriveFile(file){
       return;
     }
     lib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-    const pdf=await lib.getDocument({url:pdfObjectUrl}).promise;
-    if(!document.getElementById('pdfStatus'))return;
-    let page=1,seq=0;
+    const pdf=await lib.getDocument({url:pdfObjectUrl,isEvalSupported:false}).promise;
+    if(!current())return;
+    let page=1,seq=0,rendering=false;
     status.insertAdjacentHTML('afterend','<div id="pdfControls">'+
       '<button class="settings" id="pdfPrev" type="button">← Anterior</button>'+
       '<span id="pdfNumber"></span>'+
@@ -709,6 +726,9 @@ async function openDriveFile(file){
       '<canvas id="pdfCanvas" style="display:block;max-width:100%;margin:12px auto;background:white"></canvas>'+download);
     const canvas=document.getElementById('pdfCanvas'),ctx=canvas.getContext('2d');
     async function renderPage(){
+      if(rendering||!current())return;
+      rendering=true;
+      try{
       const ticket=++seq;
       const one=await pdf.getPage(page);
       if(ticket!==seq||!canvas.isConnected)return;
@@ -727,11 +747,14 @@ async function openDriveFile(file){
         document.getElementById('pdfPrev').disabled=page<=1;
         document.getElementById('pdfNext').disabled=page>=pdf.numPages;
       }
+      }catch(e){if(current())status.textContent='No se pudo mostrar la página: '+e.message}
+      finally{rendering=false}
     }
-    document.getElementById('pdfPrev').onclick=()=>{if(page>1){page--;renderPage()}};
-    document.getElementById('pdfNext').onclick=()=>{if(page<pdf.numPages){page++;renderPage()}};
+    document.getElementById('pdfPrev').onclick=()=>{if(!rendering&&page>1){page--;renderPage()}};
+    document.getElementById('pdfNext').onclick=()=>{if(!rendering&&page<pdf.numPages){page++;renderPage()}};
     await renderPage();
   }catch(e){
+    if(!current())return;
     if(e.message==='AUTH_NEEDED')return connectDriveScreen();
     const status=document.getElementById('pdfStatus');
     if(status)status.textContent='No se pudo mostrar el PDF en este dispositivo ('+e.message+
@@ -740,8 +763,8 @@ async function openDriveFile(file){
 }
 function settings(){if(!isAdmin){home();return}view.innerHTML='<button class="back" onclick="home()">← Volver</button><h2>Configuración</h2><p>Esta primera versión utiliza enlaces de carpetas de Drive.</p><label>Carpeta principal de Drive<input id="root" placeholder="Enlace o ID de carpeta" value="'+esc(config.root)+'"></label><h3>Agregar máquina</h3><label>Nombre<input id="machineName" placeholder="Ej.: Torno CNC"></label><label>Carpeta de esa máquina<input id="machineFolder" placeholder="Enlace o ID de carpeta"></label><button class="settings" onclick="addMachine()">+ Agregar máquina</button><h3>Máquinas configuradas</h3><div id="machineList"></div><button class="settings" onclick="saveRoot()">Guardar carpeta principal</button>';renderList()}
 function renderList(){document.getElementById('machineList').innerHTML=config.machines.map((m,i)=>'<p>'+esc(m.name)+' <button class="back" onclick="removeMachine('+i+')">Eliminar</button></p>').join('')||'<p>Todavía no hay máquinas.</p>'}
-function persist(){localStorage.setItem(KEY,JSON.stringify(config))}function saveRoot(){config.root=folderId(document.getElementById('root').value);persist();home()}
-function addMachine(){const name=document.getElementById('machineName').value.trim(),folder=folderId(document.getElementById('machineFolder').value);if(!name||!folder){alert('Completá nombre y carpeta.');return}config.root=folderId(document.getElementById('root').value);config.machines.push({name,folder});persist();settings()}
-function removeMachine(i){config.machines.splice(i,1);persist();settings()}
+function persist(){try{localStorage.setItem(KEY,JSON.stringify(config))}catch(e){console.warn('No se pudo guardar la configuración local.',e)}}function saveRoot(){if(!isAdmin)return;config.root=folderId(document.getElementById('root').value);persist();home()}
+function addMachine(){if(!isAdmin)return;const name=document.getElementById('machineName').value.trim(),folder=folderId(document.getElementById('machineFolder').value);if(!name||!folder){alert('Completá nombre y carpeta.');return}config.root=folderId(document.getElementById('root').value);if(!/^[A-Za-z0-9_-]{8,160}$/.test(folder)){alert("Ingresá un enlace o ID válido de carpeta de Drive.");return}config.removed=config.removed.filter(id=>id!==folder);if(!config.machines.some(m=>m.folder===folder))config.machines.push({name,folder});persist();settings()}
+function removeMachine(i){if(!isAdmin||!config.machines[i])return;config.removed.push(config.machines[i].folder);config.machines.splice(i,1);persist();settings()}
 Object.assign(window,{home,notes,commonSpace,pushSettings,openMachine,settings,addMachine,removeMachine,saveRoot,manageConnection,accessDashboard});
 </script></body></html>
