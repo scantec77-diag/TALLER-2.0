@@ -56,6 +56,71 @@ service cloud.firestore {
         && request.resource.data.accessCount == resource.data.accessCount + 1;
       allow delete: if false;
     }
+    // Registro de aperturas de carpetas y documentos por persona.
+    // Cada usuario escribe solo su actividad; el administrador puede consultar todos.
+    function validLibraryVisit(visitId) {
+      return request.resource.data.keys().hasOnly(['kind','itemId','name','path','visitCount','lastVisited'])
+        && request.resource.data.keys().hasAll(['kind','itemId','name','path','visitCount','lastVisited'])
+        && request.resource.data.kind in ['folder','file']
+        && request.resource.data.itemId is string
+        && request.resource.data.itemId.matches('^[A-Za-z0-9_-]{1,160}
+    match /commonMessages/{messageId} {
+      allow read: if signedIn();
+      allow create: if signedIn()
+        && request.resource.data.keys().hasAll(['authorId','authorName','text','createdAt'])
+        && request.resource.data.keys().hasOnly(['authorId','authorName','text','createdAt'])
+        && request.resource.data.authorId == request.auth.uid
+        && request.resource.data.authorName is string
+        && request.resource.data.authorName.size() > 0
+        && request.resource.data.authorName.size() <= 120
+        && request.resource.data.text is string
+        && request.resource.data.text.size() > 0
+        && request.resource.data.text.size() <= 3000
+        && request.resource.data.createdAt == request.time;
+      allow update, delete: if false;
+    }
+    // Cada dispositivo puede ser registrado y desregistrado solo por su titular.
+    match /users/{uid}/pushDevices/{deviceId} {
+      allow get, list, delete: if owner(uid);
+      allow create, update: if owner(uid)
+        && deviceId.size() == 64
+        && request.resource.data.keys().hasAll(['token','platform','updatedAt'])
+        && request.resource.data.keys().hasOnly(['token','platform','updatedAt'])
+        && request.resource.data.token is string
+        && request.resource.data.token.size() > 10
+        && request.resource.data.token.size() <= 2048
+        && request.resource.data.platform == 'web'
+        && request.resource.data.updatedAt == request.time;
+    }
+    match /roles/{uid} {
+      allow read: if owner(uid);
+      allow write: if false;
+    }
+  }
+}
+)
+        && visitId == request.resource.data.kind + '_' + request.resource.data.itemId
+        && request.resource.data.name is string
+        && request.resource.data.name.size() > 0
+        && request.resource.data.name.size() <= 160
+        && request.resource.data.path is string
+        && request.resource.data.path.size() <= 600
+        && request.resource.data.visitCount is int
+        && request.resource.data.visitCount >= 1
+        && request.resource.data.lastVisited == request.time;
+    }
+    match /users/{uid}/libraryVisits/{visitId} {
+      allow get, list: if owner(uid) || accessAdmin();
+      allow create: if owner(uid) && validLibraryVisit(visitId)
+        && request.resource.data.visitCount == 1;
+      allow update: if owner(uid) && validLibraryVisit(visitId)
+        && request.resource.data.kind == resource.data.kind
+        && request.resource.data.itemId == resource.data.itemId
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name','path','visitCount','lastVisited'])
+        && request.resource.data.visitCount == resource.data.visitCount + 1;
+      allow delete: if false;
+    }
+
     // Tablón compartido: lectura y publicación para cuentas verificadas.
     match /commonMessages/{messageId} {
       allow read: if signedIn();
