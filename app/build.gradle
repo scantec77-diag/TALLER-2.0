@@ -2,7 +2,6 @@ plugins {
     id 'com.android.application'
 }
 
-import groovy.json.JsonOutput
 
 def firebaseAndroidAppId = (System.getenv('TALLER_FIREBASE_ANDROID_APP_ID') ?: '').trim()
 
@@ -16,7 +15,7 @@ android {
         targetSdk 35
         versionCode 2
         versionName '2.0.1-push-prueba'
-        buildConfigField 'String', 'FIREBASE_ANDROID_APP_ID', JsonOutput.toJson(firebaseAndroidAppId)
+        buildConfigField 'String', 'FIREBASE_ANDROID_APP_ID', groovy.json.JsonOutput.toJson(firebaseAndroidAppId)
     }
 
     buildFeatures { buildConfig true }
