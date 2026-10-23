@@ -59,7 +59,17 @@
 .common-lightbox button{align-self:flex-end;background:#294563;color:white;border:0;border-radius:8px;padding:10px}
 .common-person-bar{display:flex;gap:8px;align-items:center;padding:8px;background:#162e40;border-radius:9px}
 @media(max-width:440px){.common-shell{height:76dvh}.common-compose .settings{padding:7px 9px}.common-bubble{max-width:96%}}
-</style><script defer src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script><link rel="icon" type="image/jpeg" href="./assets/taller-logo.jpg?v=20261022"><link rel="apple-touch-icon" href="./assets/taller-logo.jpg"></head><body><header><h1 class="app-brand"><img class="app-logo" src="./assets/taller-logo.jpg?v=20261022" width="88" height="66" alt="Logo de Taller 2.0"> <span>Taller 2.0</span></h1><p>Biblioteca de máquinas y documentación técnica <span class="ui-version">· Diseño 22/10 · SISU portada 22/10 v3</span></p></header><main><div id="view"></div></main>
+.account-menu{position:relative;margin-left:auto;display:none;align-self:flex-start}
+.account-menu[hidden]{display:none}
+.account-menu summary{list-style:none;display:flex;align-items:center;justify-content:center;width:44px;height:44px;border-radius:50%;border:1px solid #6285a6;background:#25445f;color:white;cursor:pointer;font-size:1.45rem}
+.account-menu summary::-webkit-details-marker{display:none}
+.account-menu summary:focus-visible,.account-menu button:focus-visible{outline:3px solid #9cdbff;outline-offset:2px}
+.account-panel{position:absolute;right:0;top:52px;z-index:1200;width:min(300px,calc(100vw - 26px));background:#172a40;border:1px solid #567998;border-radius:12px;padding:14px;box-shadow:0 10px 30px #0009;overflow-wrap:anywhere}
+.account-panel strong{display:block;margin-bottom:8px}.account-panel small{display:block;overflow-wrap:anywhere;margin-bottom:12px}
+.account-panel button{width:100%;text-align:left;background:#294563;border:0;border-radius:8px;color:#fff;padding:12px;cursor:pointer}
+header{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}
+header .header-brand{min-width:0}
+</style><script defer src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script><link rel="icon" type="image/jpeg" href="./assets/taller-logo.jpg?v=20261022"><link rel="apple-touch-icon" href="./assets/taller-logo.jpg"></head><body><header><div class="header-brand"><h1 class="app-brand"><img class="app-logo" src="./assets/taller-logo.jpg?v=20261022" width="88" height="66" alt="Logo de Taller 2.0"> <span>Taller 2.0</span></h1><p>Biblioteca de máquinas y documentación técnica <span class="ui-version">· Diseño 22/10 · SISU portada 22/10 v3</span></p></div><details id="accountMenu" class="account-menu" hidden><summary aria-label="Mi cuenta" title="Mi cuenta">👤</summary><div class="account-panel"><strong>Mi cuenta</strong><small id="accountEmail"></small><button id="accountLogout" type="button">↪ Cerrar sesión</button></div></details></header><main><div id="view"></div></main>
 <script type="module">
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js';
 import { getAuth, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, linkWithPopup, reauthenticateWithPopup, signOut } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js';
@@ -308,6 +318,8 @@ async function accessDashboard(){
 setInterval(updateGreeting,60000);
 document.addEventListener('visibilitychange',()=>{if(!document.hidden){updateGreeting();weatherRefreshPosition()}});
 function loginScreen(){
+  document.getElementById('accountMenu').hidden=true;
+  document.getElementById('accountMenu').style.display='none';
   document.getElementById('view').innerHTML='';
   authBox.innerHTML='<h2>Ingresar a Taller 2.0</h2><p>Entrá con tu cuenta de Google. No necesitás registrarte ni crear una contraseña.</p><button class="google-login" id="googleLogin" type="button"><span class="google-mark" aria-hidden="true">G</span>Continuar con Google</button><p id="authMessage" role="status"></p>';
   const button=document.getElementById('googleLogin');
@@ -318,6 +330,8 @@ function loginScreen(){
   };
 }
 onAuthStateChanged(auth,async user=>{
+  const accountMenu=document.getElementById('accountMenu');
+  accountMenu.open=false;accountMenu.hidden=true;accountMenu.style.display='none';
   weatherStop();
   clearCommonNotifications();
   activeUser=null;isAdmin=false;driveAccessToken=null;driveTokenExpiry=0;driveOwnerEmail=DEFAULT_DRIVE_EMAIL;
@@ -344,10 +358,18 @@ onAuthStateChanged(auth,async user=>{
     driveOwnerEmail=DEFAULT_DRIVE_EMAIL;
     if(auth.currentUser?.uid!==user.uid)return;
     isAdmin=!!role&&role.exists()&&role.data().role==='admin';
-    authBox.innerHTML='<div class="greeting-weather-row"><section id="weatherCard" class="weather-card" aria-label="Clima actual según ubicación"><div class="weather-eyebrow">📍 Clima actual</div><div id="weatherLocation" class="weather-place">Buscando ubicación…</div><div class="weather-reading"><span id="weatherSymbol" aria-hidden="true">🌤️</span><strong id="weatherTemperature">--°</strong></div><div id="weatherDescription" class="weather-description">Solicitando ubicación…</div><button type="button" id="weatherRetry" class="weather-retry" hidden>Reintentar</button><small class="weather-credit">Fuente: <a href="https://open-meteo.com/" target="_blank" rel="noopener noreferrer">Open-Meteo</a> · <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener noreferrer">CC BY 4.0</a></small></section><p id="userWelcome" class="welcome-line"></p></div><p class="session-line">Sesión: '+esc(user.email||'Cuenta de Google')+' <button class="settings" id="logout" type="button">Cerrar sesión</button></p>';
+    authBox.innerHTML='<div class="greeting-weather-row"><section id="weatherCard" class="weather-card" aria-label="Clima actual según ubicación"><div class="weather-eyebrow">📍 Clima actual</div><div id="weatherLocation" class="weather-place">Buscando ubicación…</div><div class="weather-reading"><span id="weatherSymbol" aria-hidden="true">🌤️</span><strong id="weatherTemperature">--°</strong></div><div id="weatherDescription" class="weather-description">Solicitando ubicación…</div><button type="button" id="weatherRetry" class="weather-retry" hidden>Reintentar</button><small class="weather-credit">Fuente: <a href="https://open-meteo.com/" target="_blank" rel="noopener noreferrer">Open-Meteo</a> · <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener noreferrer">CC BY 4.0</a></small></section><p id="userWelcome" class="welcome-line"></p></div>';
     updateGreeting();
     weatherStart();
-    document.getElementById('logout').onclick=async()=>{forgetAccessSession();await forgetPushRegistration({app,db,user}).catch(e=>console.warn('No se pudo cancelar el registro push:',e.message));return signOut(auth)};
+    document.getElementById('accountEmail').textContent=user.email||'Cuenta de Google';
+    accountMenu.hidden=false;accountMenu.style.display='block';
+    document.getElementById('accountLogout').onclick=async()=>{
+      if(!window.confirm('¿Querés cerrar sesión en Taller 2.0?'))return;
+      accountMenu.open=false;
+      forgetAccessSession();
+      await forgetPushRegistration({app,db,user}).catch(e=>console.warn('No se pudo cancelar el registro push:',e.message));
+      return signOut(auth);
+    };
     home();
     if(location.hash==='#espacio-comun') commonSpace();
     recordAccess(user);
@@ -359,6 +381,7 @@ onAuthStateChanged(auth,async user=>{
     document.getElementById('view').innerHTML='';
   }
 });
+document.addEventListener('click',e=>{const menu=document.getElementById('accountMenu');if(menu.open&&!menu.contains(e.target))menu.open=false});
 const KEY="taller20_config_v1";
 function readConfig(){
   let saved={};
