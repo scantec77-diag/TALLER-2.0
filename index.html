@@ -39,7 +39,7 @@
 <script type="module">
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js';
 import { getAuth, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, linkWithPopup, reauthenticateWithPopup, signOut } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js';
-import { getFirestore, doc, getDoc, setDoc, collection, getDocs, increment, serverTimestamp, addDoc, query, orderBy, limit, startAfter, onSnapshot } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js';
+import { getFirestore, doc, getDoc, setDoc, collection, getDocs, increment, serverTimestamp, addDoc, query, orderBy, limit, startAfter, onSnapshot, writeBatch } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js';
 import { firebaseConfig } from './firebase-config.js';
 import { showPushSettings, refreshPushRegistration, forgetPushRegistration } from './push-notifications.js';
 const app=initializeApp(firebaseConfig),auth=getAuth(app),db=getFirestore(app);
@@ -399,63 +399,138 @@ function startCommonNotifications(user){
   );
 }
 
+// Leave 8 KiB for document names, author metadata and Firestore overhead.
+const COMMON_TEXT_BYTES=1040000, COMMON_PHOTO_CHARS=320000, COMMON_PHOTO_COUNT=4;
+function commonTextBytes(text){return new TextEncoder().encode(text).length}
+async function compressCommonPhoto(file){
+  if(!/^image\/(jpeg|png|webp|gif|bmp|heic|heif)$/i.test(file.type))throw Error('Elegí una foto JPG, PNG o WebP. Si el formato no abre, convertí la foto a JPG.');
+  if(file.size>20*1024*1024)throw Error('La foto supera los 20 MB. Elegí una copia más pequeña.');
+  const url=URL.createObjectURL(file),img=new Image();
+  try{
+    await new Promise((resolve,reject)=>{img.onload=resolve;img.onerror=()=>reject(Error('No se pudo abrir la foto. Probá guardarla como JPG.'));img.src=url});
+    let edge=1600;
+    for(let pass=0;pass<6;pass++,edge=Math.round(edge*.75)){
+      const scale=Math.min(1,edge/Math.max(img.naturalWidth,img.naturalHeight));
+      const canvas=document.createElement('canvas');
+      canvas.width=Math.max(1,Math.round(img.naturalWidth*scale));canvas.height=Math.max(1,Math.round(img.naturalHeight*scale));
+      const ctx=canvas.getContext('2d');ctx.fillStyle='#fff';ctx.fillRect(0,0,canvas.width,canvas.height);ctx.drawImage(img,0,0,canvas.width,canvas.height);
+      for(const quality of [.85,.7,.55]){
+        const dataUrl=canvas.toDataURL('image/jpeg',quality);
+        if(dataUrl.length<=COMMON_PHOTO_CHARS)return dataUrl;
+      }
+    }
+    throw Error('No se pudo reducir la foto. Elegí otra imagen.');
+  }finally{URL.revokeObjectURL(url)}
+}
 function commonSpace(){
   if(!activeUser)return;
   const user=activeUser;
-  view.innerHTML='<button class="back" onclick="home()">← Volver</button><h2>💬 ESPACIO COMUN</h2><p>Compartí consultas, novedades y soluciones con todos los usuarios de Taller 2.0.</p><form id="commonForm"><label for="commonText">Tu mensaje</label><textarea id="commonText" maxlength="3000" required placeholder="Escribí algo para compartir..." style="width:100%;min-height:130px;padding:12px;border-radius:9px;background:#122237;color:white;border:1px solid #526a84;font:inherit"></textarea><small>Hasta 3000 caracteres. Tu nombre será visible para todos.</small><div><button class="settings" id="commonSend" type="submit">Publicar</button></div><p id="commonSendStatus" role="status"></p></form><button class="settings" id="commonRefresh" type="button">⟳ Actualizar mensajes</button><p id="commonStatus" role="status"></p><div id="commonMessages"></div><button class="settings" id="commonMore" type="button" hidden>Ver anteriores</button>';
+  view.innerHTML='<button class="back" onclick="home()">← Volver</button><h2>💬 ESPACIO COMUN</h2><p>Compartí consultas, novedades y soluciones con todos los usuarios de Taller 2.0.</p><form id="commonForm"><label for="commonText">Tu mensaje</label><textarea id="commonText" placeholder="Escribí o pegá tu mensaje..." style="width:100%;min-height:200px;padding:12px;border-radius:9px;background:#122237;color:white;border:1px solid #526a84;font:inherit"></textarea><small id="commonCounter" aria-live="polite"></small><p><small>Hasta 1.040.000 bytes de texto por mensaje. Las tildes y emojis ocupan más de un byte. Las fotos se guardan aparte y no descuentan capacidad del texto. Tu nombre será visible para todos.</small></p><button class="settings" id="commonChoose" type="button">📷 Agregar fotos</button><input id="commonFiles" type="file" accept="image/*" multiple hidden><small>Hasta 4 fotos por publicación, comprimidas. También podés pegar fotos desde el portapapeles si tu dispositivo lo permite.</small><div id="commonPreview" style="display:flex;flex-wrap:wrap;gap:10px"></div><div><button class="settings" id="commonSend" type="submit">Publicar</button></div><p id="commonSendStatus" role="status"></p></form><button class="settings" id="commonRefresh" type="button">⟳ Actualizar mensajes</button><p id="commonStatus" role="status"></p><div id="commonMessages"></div><button class="settings" id="commonMore" type="button" hidden>Ver anteriores</button>';
   const form=document.getElementById('commonForm'),input=document.getElementById('commonText');
   const send=document.getElementById('commonSend'),sendStatus=document.getElementById('commonSendStatus');
   const status=document.getElementById('commonStatus'),list=document.getElementById('commonMessages');
   const refresh=document.getElementById('commonRefresh'),more=document.getElementById('commonMore');
-  let cursor=null,loading=false;
+  const choose=document.getElementById('commonChoose'),files=document.getElementById('commonFiles'),preview=document.getElementById('commonPreview'),counter=document.getElementById('commonCounter');
+  let cursor=null,loading=false,preparing=false,saving=false,photos=[];
   const current=()=>form.isConnected&&activeUser?.uid===user.uid;
-  const explain=e=>e.code==='permission-denied'?'El espacio común está pendiente de habilitación. El administrador debe activar sus permisos.':'No se pudo conectar. Revisá Internet y volvé a intentar.';
+  const explain=e=>e.code==='permission-denied'?'Firebase rechazó el guardado o la lectura. El administrador debe publicar las reglas actualizadas para textos largos y fotos.':e.code==='resource-exhausted'?'Se alcanzó la cuota de Firebase. Probá más tarde.':'No se pudo conectar. Revisá Internet y volvé a intentar.';
+  function count(){
+    const bytes=commonTextBytes(input.value.trim());
+    counter.textContent=Array.from(input.value).length.toLocaleString('es-AR')+' caracteres · '+bytes.toLocaleString('es-AR')+' / 1.040.000 bytes';
+    input.setCustomValidity(bytes>COMMON_TEXT_BYTES?'El texto supera la capacidad de este mensaje. Dividilo en dos publicaciones.':'');
+  }
+  input.addEventListener('input',count);count();
+  function paintPhotos(){
+    preview.replaceChildren();
+    photos.forEach((src,i)=>{
+      const box=document.createElement('div'),img=document.createElement('img'),remove=document.createElement('button');
+      img.src=src;img.alt='Foto adjunta '+(i+1);img.style.cssText='display:block;width:120px;height:100px;object-fit:contain';
+      remove.type='button';remove.className='back';remove.textContent='Quitar foto '+(i+1);remove.disabled=saving||preparing;
+      remove.onclick=()=>{if(!saving&&!preparing){photos.splice(i,1);paintPhotos()}};box.append(img,remove);preview.append(box);
+    });
+  }
+  async function addPhotos(selected){
+    if(preparing||saving||!current())return;
+    preparing=true;send.disabled=true;choose.disabled=true;paintPhotos();
+    sendStatus.textContent='Preparando fotos...';
+    let warning='';
+    try{
+      for(const file of selected){
+        if(photos.length>=COMMON_PHOTO_COUNT){warning='Máximo 4 fotos por publicación.';break}
+        const dataUrl=await compressCommonPhoto(file);
+        if(!current())return;
+        photos.push(dataUrl);
+      }
+      if(current())sendStatus.textContent=warning||'Fotos listas para publicar.';
+    }catch(e){if(current())sendStatus.textContent=e.message}
+    finally{preparing=false;if(current()){send.disabled=false;choose.disabled=false;files.value='';paintPhotos()}}
+  }
+  choose.onclick=()=>files.click();files.onchange=()=>addPhotos(Array.from(files.files||[]));
+  input.addEventListener('paste',event=>{
+    const selected=Array.from(event.clipboardData?.items||[]).filter(x=>x.kind==='file'&&x.type.startsWith('image/')).map(x=>x.getAsFile()).filter(Boolean);
+    if(selected.length){event.preventDefault();addPhotos(selected)}
+  });
   async function loadMessages(append=false){
     if(!current()||loading)return;
     loading=true;refresh.disabled=true;more.disabled=true;status.textContent='Cargando mensajes...';
     try{
-      const constraints=[orderBy('createdAt','desc'),limit(30)];
+      const constraints=[orderBy('createdAt','desc'),limit(10)];
       if(append&&cursor)constraints.push(startAfter(cursor));
       const snap=await getDocs(query(collection(db,'commonMessages'),...constraints));
       if(!current())return;
       if(!append)list.replaceChildren();
       for(const item of snap.docs){
-        const data=item.data(),card=document.createElement('article');
-        card.className='access-person';
+        const data=item.data(),card=document.createElement('article');card.className='access-person';
         const author=document.createElement('strong'),date=document.createElement('small'),body=document.createElement('p');
-        author.textContent=data.authorName||'Usuario';
-        date.textContent=data.createdAt?.toDate?.().toLocaleString('es-AR')||'Fecha pendiente';
-        body.textContent=data.text||'';body.style.whiteSpace='pre-wrap';body.style.overflowWrap='anywhere';
-        card.append(author,date,body);list.append(card);
+        author.textContent=data.authorName||'Usuario';date.textContent=data.createdAt?.toDate?.().toLocaleString('es-AR')||'Fecha pendiente';
+        const full=String(data.text||'');body.textContent=full.slice(0,3000);body.style.whiteSpace='pre-wrap';body.style.overflowWrap='anywhere';card.append(author,date,body);
+        if(full.length>3000){const expand=document.createElement('button');expand.type='button';expand.className='back';expand.textContent='Leer mensaje completo';expand.onclick=()=>{const open=expand.textContent==='Leer mensaje completo';body.textContent=open?full:full.slice(0,3000);expand.textContent=open?'Mostrar menos':'Leer mensaje completo'};card.append(expand)}
+        if(Number.isInteger(data.photoCount)&&data.photoCount>0&&data.photoCount<=COMMON_PHOTO_COUNT){
+          const show=document.createElement('button'),gallery=document.createElement('div');show.type='button';show.className='back';show.textContent='Ver fotos ('+data.photoCount+')';card.append(show,gallery);
+          show.onclick=async()=>{
+            show.disabled=true;show.textContent='Cargando fotos...';
+            try{
+              const snaps=await Promise.all(Array.from({length:data.photoCount},(_,i)=>getDoc(doc(db,'commonMessages',item.id,'photos',String(i)))));
+              if(!current()||!card.isConnected)return;
+              gallery.replaceChildren();
+              for(const photo of snaps){
+                const src=photo.data()?.dataUrl;
+                if(!photo.exists()||typeof src!=='string'||src.length>COMMON_PHOTO_CHARS||!/^data:image\/jpeg;base64,[A-Za-z0-9+/=]+$/.test(src))throw Error('Foto no disponible');
+                const img=document.createElement('img');img.src=src;img.alt='Foto compartida por '+(data.authorName||'Usuario');img.style.cssText='display:block;max-width:100%;height:auto;margin:12px 0';gallery.append(img);
+              }
+              show.remove();
+            }catch(e){if(current()&&card.isConnected){gallery.textContent=explain(e);show.disabled=false;show.textContent='Reintentar fotos'}}
+          };
+        }
+        list.append(card);
       }
-      cursor=snap.docs[snap.docs.length-1]||null;
-      more.hidden=snap.size<30;
+      cursor=snap.docs[snap.docs.length-1]||null;more.hidden=snap.size<10;
       status.textContent=list.children.length?'Los mensajes más recientes aparecen primero.':'Todavía no hay mensajes. ¡Publicá el primero!';
     }catch(e){if(current())status.textContent=explain(e)}
     finally{loading=false;if(current()){refresh.disabled=false;more.disabled=false}}
   }
   form.onsubmit=async event=>{
     event.preventDefault();
-    if(send.disabled||!current())return;
+    if(saving||preparing||!current())return;
     const text=input.value.trim();
-    if(!text||text.length>3000){sendStatus.textContent='Escribí un mensaje de hasta 3000 caracteres.';return}
-    send.disabled=true;input.disabled=true;sendStatus.textContent='Publicando...';
+    if(!text&&!photos.length){sendStatus.textContent='Escribí un mensaje o agregá una foto.';return}
+    if(commonTextBytes(text)>COMMON_TEXT_BYTES){sendStatus.textContent='El texto supera la capacidad. Dividilo en dos publicaciones.';return}
+    saving=true;send.disabled=true;input.disabled=true;choose.disabled=true;paintPhotos();sendStatus.textContent='Publicando...';
     try{
       const profile=user.providerData?.find(p=>p.providerId==='google.com');
-      await addDoc(collection(db,'commonMessages'),{
-        authorId:user.uid,
-        authorName:String(profile?.displayName||user.displayName||'Usuario').trim().slice(0,120)||'Usuario',
-        text,createdAt:serverTimestamp()
-      });
+      const ref=doc(collection(db,'commonMessages')),batch=writeBatch(db);
+      const message={authorId:user.uid,authorName:String(profile?.displayName||user.displayName||'Usuario').trim().slice(0,120)||'Usuario',text,createdAt:serverTimestamp()};
+      if(photos.length)message.photoCount=photos.length;
+      batch.set(ref,message);
+      photos.forEach((dataUrl,i)=>batch.set(doc(db,'commonMessages',ref.id,'photos',String(i)),{authorId:user.uid,dataUrl,createdAt:serverTimestamp()}));
+      await batch.commit();
       if(!current())return;
-      input.value='';sendStatus.textContent='Mensaje publicado ✓';
+      input.value='';photos=[];count();sendStatus.textContent='Publicación guardada ✓';
       await loadMessages();
-    }catch(e){if(current())sendStatus.textContent=explain(e)+' Tu texto sigue en el cuadro.'}
-    finally{if(current()){send.disabled=false;input.disabled=false}}
+    }catch(e){if(current())sendStatus.textContent=explain(e)+' El texto y las fotos siguen disponibles para reintentar.'}
+    finally{saving=false;if(current()){send.disabled=false;input.disabled=false;choose.disabled=false;paintPhotos()}}
   };
-  refresh.onclick=()=>loadMessages();
-  more.onclick=()=>loadMessages(true);
-  loadMessages();
+  refresh.onclick=()=>loadMessages();more.onclick=()=>loadMessages(true);loadMessages();
 }
 
 function pushSettings(){

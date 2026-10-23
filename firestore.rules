@@ -91,15 +91,42 @@ service cloud.firestore {
       allow read: if signedIn();
       allow create: if signedIn()
         && request.resource.data.keys().hasAll(['authorId','authorName','text','createdAt'])
-        && request.resource.data.keys().hasOnly(['authorId','authorName','text','createdAt'])
+        && request.resource.data.keys().hasOnly(['authorId','authorName','text','createdAt','photoCount'])
         && request.resource.data.authorId == request.auth.uid
         && request.resource.data.authorName is string
         && request.resource.data.authorName.size() > 0
         && request.resource.data.authorName.size() <= 120
         && request.resource.data.text is string
-        && request.resource.data.text.size() > 0
-        && request.resource.data.text.size() <= 3000
+        && request.resource.data.get('photoCount', 0) is int
+        && request.resource.data.get('photoCount', 0) >= 0
+        && request.resource.data.get('photoCount', 0) <= 4
+        && (request.resource.data.text.size() > 0 || request.resource.data.get('photoCount', 0) > 0)
+        && request.resource.data.text.toUtf8().size() <= 1040000
         && request.resource.data.createdAt == request.time;
+      allow update, delete: if false;
+    }
+    // Photos are separate immutable documents, committed atomically with their message.
+    match /commonMessages/{messageId}/photos/{photoId} {
+      function parentAfter() {
+        return getAfter(/databases/$(database)/documents/commonMessages/$(messageId)).data;
+      }
+      allow read: if signedIn();
+      allow create: if signedIn()
+        && photoId in ['0','1','2','3']
+        && request.resource.data.keys().hasAll(['authorId','dataUrl','createdAt'])
+        && request.resource.data.keys().hasOnly(['authorId','dataUrl','createdAt'])
+        && request.resource.data.authorId == request.auth.uid
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.dataUrl is string
+        && request.resource.data.dataUrl.size() <= 320000
+        && request.resource.data.dataUrl.matches('^data:image/jpeg;base64,[A-Za-z0-9+/=]+$')
+        && parentAfter().authorId == request.auth.uid
+        && parentAfter().createdAt == request.time
+        && parentAfter().photoCount is int
+        && ((photoId == '0' && parentAfter().photoCount > 0)
+          || (photoId == '1' && parentAfter().photoCount > 1)
+          || (photoId == '2' && parentAfter().photoCount > 2)
+          || (photoId == '3' && parentAfter().photoCount > 3));
       allow update, delete: if false;
     }
     // Cada dispositivo puede ser registrado y desregistrado solo por su titular.

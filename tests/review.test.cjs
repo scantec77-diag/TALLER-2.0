@@ -54,3 +54,27 @@ test('late PDF response does not overwrite a newer view',async()=>{
  const result=ctx.openDriveFile({id:'test',name:'test.pdf',mimeType:'application/pdf'});screen.isConnected=false;ctx.driveListVersion++;
  resolve({blob:async()=>new Blob(['test'])});await result;assert.equal(created,0);
 });
+
+test('common text capacity counts UTF-8 bytes including accents and emoji',()=>{
+ const start=html.indexOf('function commonTextBytes('),end=html.indexOf('async function compressCommonPhoto(',start);
+ const ctx={TextEncoder};vm.createContext(ctx);vm.runInContext(html.slice(start,end),ctx);
+ assert.equal(ctx.commonTextBytes('á😀a'),7);
+ assert.equal(ctx.commonTextBytes('a'.repeat(1040000)),1040000);
+ assert.equal(ctx.commonTextBytes('😀'.repeat(260000)),1040000);
+ assert(ctx.commonTextBytes('😀'.repeat(260001))>1040000);
+});
+test('common messages preserve failed drafts and save photos atomically apart from text',async()=>{
+ const elements={};
+ function element(){return {value:'',textContent:'',isConnected:true,disabled:false,style:{},children:[],addEventListener(){},setCustomValidity(){},replaceChildren(){this.children=[]},append(...items){this.children.push(...items)}}}
+ const view=element();Object.defineProperty(view,'innerHTML',{set(html){for(const m of html.matchAll(/id="([^"]+)"/g))elements[m[1]]=element()}});
+ let fail=false,writes=[],calls=0;
+ const ctx={TextEncoder,activeUser:{uid:'u',displayName:'Ari'},db:{},view,document:{getElementById:id=>elements[id],createElement:element},collection:(...x)=>x.slice(1).join('/'),doc:(...x)=>x.length===1?{id:'id',path:x[0]+'/id'}:x.slice(1).join('/'),serverTimestamp:()=>1,orderBy(){},limit(){},startAfter(){},query(){},getDocs:async()=>({docs:[],size:0}),writeBatch(){let pending=[];return {set(ref,data){pending.push({ref,data})},async commit(){calls++;if(fail)throw {code:'permission-denied'};writes=pending}}}};
+ vm.createContext(ctx);vm.runInContext(html.slice(html.indexOf('// Leave 8 KiB'),html.indexOf('\nfunction pushSettings()')),ctx);ctx.commonSpace();
+ const form=elements.commonForm,input=elements.commonText;
+ input.value='x'.repeat(4000);await form.onsubmit({preventDefault(){}});assert.equal(writes[0].data.text.length,4000);
+ fail=true;input.value='conservar';await form.onsubmit({preventDefault(){}});assert.equal(input.value,'conservar');assert.equal(elements.commonSend.disabled,false);
+ input.value='😀'.repeat(260001);const before=calls;await form.onsubmit({preventDefault(){}});assert.equal(calls,before);
+ ctx.compressCommonPhoto=async()=> 'data:image/jpeg;base64,YQ==';elements.commonFiles.files=[{type:'image/jpeg'}];await elements.commonFiles.onchange();
+ fail=false;input.value='';await form.onsubmit({preventDefault(){}});
+ assert.equal(writes.length,2);assert.equal(writes[0].data.photoCount,1);assert.equal(writes[0].data.text,'');assert(!('dataUrl' in writes[0].data));assert.equal(writes[1].ref,'commonMessages/id/photos/0');assert.equal(input.value,'');
+});
