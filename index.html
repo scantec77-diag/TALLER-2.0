@@ -434,13 +434,13 @@ async function compressCommonPhoto(file){
 function commonSpace(){
   if(!activeUser)return;
   const user=activeUser;
-  view.innerHTML='<button class="back" onclick="home()">← Volver</button><h2>💬 ESPACIO COMUN</h2><p>Compartí consultas, novedades y soluciones con todos los usuarios de Taller 2.0.</p><form id="commonForm"><label for="commonText">Tu mensaje</label><textarea id="commonText" placeholder="Escribí o pegá tu mensaje..." style="width:100%;min-height:200px;padding:12px;border-radius:9px;background:#122237;color:white;border:1px solid #526a84;font:inherit"></textarea><small id="commonCounter" aria-live="polite"></small><p><small>Hasta 1.040.000 bytes de texto por mensaje. Las tildes y emojis ocupan más de un byte. Las fotos se guardan aparte y no descuentan capacidad del texto. Tu nombre será visible para todos.</small></p><button class="settings" id="commonChoose" type="button">📷 Agregar fotos</button><input id="commonFiles" type="file" accept="image/*" multiple hidden><small>Hasta 4 fotos por publicación, comprimidas. También podés pegar fotos desde el portapapeles si tu dispositivo lo permite.</small><div id="commonPreview" style="display:flex;flex-wrap:wrap;gap:10px"></div><div><button class="settings" id="commonSend" type="submit">Publicar</button></div><p id="commonSendStatus" role="status"></p></form><button class="settings" id="commonRefresh" type="button">⟳ Actualizar mensajes</button><p id="commonStatus" role="status"></p><div id="commonMessages"></div><button class="settings" id="commonMore" type="button" hidden>Ver anteriores</button>';
+  view.innerHTML='<button class="back" onclick="home()">← Volver</button><h2>💬 ESPACIO COMUN</h2><p>Compartí consultas, novedades y soluciones con todos los usuarios de Taller 2.0.</p><form id="commonForm"><label for="commonText">Tu mensaje</label><textarea id="commonText" placeholder="Escribí o pegá tu mensaje..." style="width:100%;min-height:200px;padding:12px;border-radius:9px;background:#122237;color:white;border:1px solid #526a84;font:inherit"></textarea><small id="commonCounter" aria-live="polite"></small><p><small>Hasta 1.040.000 bytes de texto por mensaje. Las tildes y emojis ocupan más de un byte. Las fotos se guardan aparte y no descuentan capacidad del texto. Tu nombre será visible para todos.</small></p><button class="settings" id="commonChoose" type="button">📷 Agregar fotos</button><input id="commonFiles" type="file" accept="image/*" multiple hidden><small>Hasta 4 fotos por publicación, comprimidas. También podés pegar fotos desde el portapapeles si tu dispositivo lo permite.</small><div id="commonPreview" style="display:flex;flex-wrap:wrap;gap:10px"></div><div><button class="settings" id="commonSend" type="submit">Publicar</button></div><p id="commonSendStatus" role="status"></p></form><button class="settings" id="commonRefresh" type="button">⟳ Actualizar mensajes</button><p id="commonStatus" role="status"></p><h3>Mensajes por persona</h3><p><small>Tocá un nombre para ver sus publicaciones y horarios.</small></p><div id="commonPeople" style="display:grid;gap:8px;margin-bottom:18px"></div><h3>Chat en vivo</h3><div id="commonMessages" role="log" aria-label="Conversación del espacio común" aria-live="polite" style="height:min(55vh,470px);min-height:240px;overflow-y:auto;overscroll-behavior:contain;touch-action:pan-y;padding:12px;border:1px solid #526a84;border-radius:12px;background:#0e2033;display:flex;flex-direction:column;gap:10px"></div><button class="settings" id="commonMore" type="button" hidden>Ver mensajes anteriores</button>';
   const form=document.getElementById('commonForm'),input=document.getElementById('commonText');
   const send=document.getElementById('commonSend'),sendStatus=document.getElementById('commonSendStatus');
-  const status=document.getElementById('commonStatus'),list=document.getElementById('commonMessages');
+  const status=document.getElementById('commonStatus'),list=document.getElementById('commonMessages'),people=document.getElementById('commonPeople');
   const refresh=document.getElementById('commonRefresh'),more=document.getElementById('commonMore');
   const choose=document.getElementById('commonChoose'),files=document.getElementById('commonFiles'),preview=document.getElementById('commonPreview'),counter=document.getElementById('commonCounter');
-  let cursor=null,loading=false,preparing=false,saving=false,photos=[];
+  let cursor=null,loading=false,preparing=false,saving=false,photos=[],liveRefreshPending=false;
   const current=()=>form.isConnected&&activeUser?.uid===user.uid;
   const explain=e=>e.code==='permission-denied'?'Firebase rechazó el guardado o la lectura. El administrador debe publicar las reglas actualizadas para textos largos y fotos.':e.code==='resource-exhausted'?'Se alcanzó la cuota de Firebase. Probá más tarde.':'No se pudo conectar. Revisá Internet y volvé a intentar.';
   function count(){
@@ -487,11 +487,18 @@ function commonSpace(){
       if(append&&cursor)constraints.push(startAfter(cursor));
       const snap=await getDocs(query(collection(db,'commonMessages'),...constraints));
       if(!current())return;
-      if(!append)list.replaceChildren();
+      if(!append){list.replaceChildren();people.replaceChildren();}
+      const keepBottom=!append&&(list.scrollHeight-list.scrollTop-list.clientHeight<100);
+      const previousScrollHeight=list.scrollHeight;
+      const groups=new Map(Array.from(people.children).map(el=>[el.dataset.author,el]));
       for(const item of snap.docs){
         const data=item.data(),card=document.createElement('article');card.className='access-person';
         const author=document.createElement('strong'),date=document.createElement('small'),body=document.createElement('p');
         author.textContent=data.authorName||'Usuario';date.textContent=data.createdAt?.toDate?.().toLocaleString('es-AR')||'Fecha pendiente';
+        const authorKey=String(data.authorId||data.authorName||'Usuario');
+        let group=groups.get(authorKey);
+        if(!group){group=document.createElement('details');group.dataset.author=authorKey;group.style.cssText='border:1px solid #526a84;border-radius:10px;padding:10px;background:#122237';const summary=document.createElement('summary');summary.style.cursor='pointer';summary.textContent=data.authorName||'Usuario';group.append(summary);people.append(group);groups.set(authorKey,group)}
+        const entry=document.createElement('div');entry.style.cssText='padding:8px 4px;border-top:1px solid #384e65;white-space:pre-wrap;overflow-wrap:anywhere';entry.textContent=(data.createdAt?.toDate?.().toLocaleString('es-AR')||'Fecha pendiente')+' — '+String(data.text|| (data.photoCount?'📷 Foto':'')).slice(0,400);group.append(entry);
         const full=String(data.text||'');body.textContent=full.slice(0,3000);body.style.whiteSpace='pre-wrap';body.style.overflowWrap='anywhere';card.append(author,date,body);
         if(full.length>3000){const expand=document.createElement('button');expand.type='button';expand.className='back';expand.textContent='Leer mensaje completo';expand.onclick=()=>{const open=expand.textContent==='Leer mensaje completo';body.textContent=open?full:full.slice(0,3000);expand.textContent=open?'Mostrar menos':'Leer mensaje completo'};card.append(expand)}
         if(Number.isInteger(data.photoCount)&&data.photoCount>0&&data.photoCount<=COMMON_PHOTO_COUNT){
@@ -511,12 +518,14 @@ function commonSpace(){
             }catch(e){if(current()&&card.isConnected){gallery.textContent=explain(e);show.disabled=false;show.textContent='Reintentar fotos'}}
           };
         }
-        list.append(card);
+        list.prepend(card);
       }
+      if(append)list.scrollTop=list.scrollHeight-previousScrollHeight;
+      else if(keepBottom)list.scrollTop=list.scrollHeight;
       cursor=snap.docs[snap.docs.length-1]||null;more.hidden=snap.size<10;
       status.textContent=list.children.length?'Los mensajes más recientes aparecen primero.':'Todavía no hay mensajes. ¡Publicá el primero!';
     }catch(e){if(current())status.textContent=explain(e)}
-    finally{loading=false;if(current()){refresh.disabled=false;more.disabled=false}}
+    finally{loading=false;if(current()){refresh.disabled=false;more.disabled=false;if(liveRefreshPending){liveRefreshPending=false;loadMessages();}}}
   }
   form.onsubmit=async event=>{
     event.preventDefault();
@@ -539,7 +548,13 @@ function commonSpace(){
     }catch(e){if(current())sendStatus.textContent=explain(e)+' El texto y las fotos siguen disponibles para reintentar.'}
     finally{saving=false;if(current()){send.disabled=false;input.disabled=false;choose.disabled=false;paintPhotos()}}
   };
-  refresh.onclick=()=>loadMessages();more.onclick=()=>loadMessages(true);loadMessages();
+  refresh.onclick=()=>loadMessages();more.onclick=()=>loadMessages(true);
+  loadMessages();
+  const unsubscribeChat=onSnapshot(query(collection(db,'commonMessages'),orderBy('createdAt','desc'),limit(1)),()=>{
+    if(!current()){unsubscribeChat();return}
+    if(loading)liveRefreshPending=true;
+    else loadMessages();
+  },error=>{if(current())console.warn('Chat en vivo no disponible:',error.code||error.message)});
 }
 
 function pushSettings(){
