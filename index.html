@@ -48,7 +48,7 @@ const DEFAULT_DRIVE_EMAIL='manuales.taller.exolgan@gmail.com';
 // El servicio se activa para todos únicamente después de publicarlo y verificar permisos.
 // Mientras tanto, el administrador puede probarlo en su propio equipo.
 const LIBRARY_SERVICE_URL='https://script.google.com/macros/s/AKfycbzPf-zrdvBwb6jxxTAmI6vdqQO8mkpJf1324NuIYFpBgwZS5kbHE1G2zdZDEihZPXUh/exec';
-const DIRECT_LIB_DEFAULT=false;
+const DIRECT_LIB_DEFAULT=true;
 const DIRECT_LIB_FLAG='taller20_direct_library_test';
 const useDirectLibrary=()=>{try{return DIRECT_LIB_DEFAULT||(isAdmin&&localStorage.getItem(DIRECT_LIB_FLAG)==='1')}catch(e){return DIRECT_LIB_DEFAULT}};
 let activeUser=null,isAdmin=false,driveAccessToken=null,driveTokenExpiry=0,driveTrail=[],currentMachineIndex=null,pdfObjectUrl=null,driveOwnerEmail=DEFAULT_DRIVE_EMAIL;
