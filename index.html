@@ -562,7 +562,7 @@ function commonSpace(){
       const matching=personId?snap.docs.filter(d=>d.data().authorId===personId):snap.docs;
       // Los más antiguos se colocan arriba: orden cronológico como WhatsApp.
       const wasAtBottom=list.scrollHeight-list.scrollTop-list.clientHeight<100;
-      for(const item of matching.slice().reverse())list.prepend(makeCard(item));
+      const batch=document.createDocumentFragment();for(const item of matching.slice().reverse())batch.append(makeCard(item));if(append)list.prepend(batch);else list.append(batch);
       cursor=snap.docs[snap.docs.length-1]||null;
       more.hidden=snap.size<(personId?80:30);
       status.textContent=personId?'Historial de '+personName+(more.hidden?'':' · Ver anteriores para buscar más'):(list.children.length?'Mensajes guardados':'Todavía no hay mensajes');
