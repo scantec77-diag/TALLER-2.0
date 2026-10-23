@@ -55,3 +55,6 @@ exports.notifyCommonMessage = onDocumentCreated({
   }
   console.log('Avisos del espacio común: dispositivos destinatarios:', entries.length);
 });
+
+// Taller IA: callable independiente, no modifica las notificaciones existentes.
+exports.tallerIA=require('./taller-ia.js').tallerIA;
