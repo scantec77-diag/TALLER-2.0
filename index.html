@@ -77,6 +77,7 @@ import { getAuth, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, linkW
 import { getFirestore, doc, getDoc, setDoc, collection, getDocs, increment, serverTimestamp, addDoc, query, orderBy, limit, startAfter, onSnapshot, writeBatch } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js';
 import { firebaseConfig } from './firebase-config.js';
 import { showManualContentSearch } from './manual-content-search.js';
+import { findOcrPages, indexScannedManuals } from './manual-ocr.js';
 import { showPushSettings, refreshPushRegistration, forgetPushRegistration } from './push-notifications.js';
 const app=initializeApp(firebaseConfig),auth=getAuth(app),db=getFirestore(app);
 const driveApp=initializeApp(firebaseConfig,'taller20-drive-reader'),driveAuth=getAuth(driveApp);
@@ -651,7 +652,10 @@ async function manualContentSearch(){
  showManualContentSearch({
   view,request:driveRequest,
   rootIds:[config.root,...config.machines.map(m=>m.folder)],
-  openFile:(file,query)=>openDriveFile(file,query),
+  openFile:(file,query,ocrMatches)=>openDriveFile(file,query,ocrMatches),
+  searchOcrPages:terms=>findOcrPages(db,terms),
+  onStartOcr:options=>indexScannedManuals({db,request:driveRequest,rootIds:[config.root,...config.machines.map(m=>m.folder)],...options}),
+  isAdmin,
   home
  });
 }
@@ -903,7 +907,7 @@ function showWordTextMatches(status,text,searchText){
  }
  status.after(box);
 }
-async function openDriveFile(file,searchText=''){
+async function openDriveFile(file,searchText='',ocrMatches=[]){
   const version=++driveListVersion;
   clearPdfPreview();
   recordLibraryVisit('file',file.id,file.name,[...driveTrail.map(x=>x.name),file.name].join(' / '));
@@ -982,7 +986,10 @@ async function openDriveFile(file,searchText=''){
       }
       pdfMatches.sort((a,b)=>b.score-a.score||a.page-b.page);
     }
-    let page=pdfMatches[0]?.page||1,seq=0,rendering=false;
+    const allMatches=new Map(pdfMatches.map(match=>[match.page,match]));
+    for(const match of ocrMatches||[]){const existing=allMatches.get(match.page);if(existing){existing.score=Math.max(existing.score||0,match.score||0);if(!existing.text)existing.text=match.text||'';}else allMatches.set(match.page,match);}
+    const pageMatches=[...allMatches.values()].sort((a,b)=>(b.score||0)-(a.score||0)||a.page-b.page);
+    let page=pageMatches[0]?.page||1,seq=0,rendering=false;
     status.insertAdjacentHTML('afterend','<div id="pdfControls">'+
       '<button class="settings" id="pdfPrev" type="button">← Anterior</button>'+
       '<span id="pdfNumber"></span>'+
@@ -1006,7 +1013,7 @@ async function openDriveFile(file,searchText=''){
       canvas.style.height=Math.round(viewport.height/pixelRatio)+'px';
       await one.render({canvasContext:ctx,viewport}).promise;
       if(ticket===seq&&canvas.isConnected){
-        status.textContent='PDF cargado'+(queryTerms.length?' · '+pdfMatches.length+' páginas con coincidencias':'');
+        status.textContent='PDF cargado'+(queryTerms.length?' · '+pageMatches.length+' páginas con coincidencias':'');
         document.getElementById('pdfNumber').textContent=' Página '+page+' de '+pdf.numPages+' ';
         document.getElementById('pdfPrev').disabled=page<=1;
         document.getElementById('pdfNext').disabled=page>=pdf.numPages;
@@ -1019,9 +1026,9 @@ async function openDriveFile(file,searchText=''){
     if(queryTerms.length){
       const box=document.createElement('section');box.style.cssText='margin:12px 0;padding:10px;border:1px solid #405c7a;border-radius:9px;background:#142337';
       const heading=document.createElement('strong');
-      heading.textContent=pdfMatches.length?'Coincidencias en el manual ('+pdfMatches.length+' páginas):':'Drive encontró el PDF, pero el visor no pudo extraer texto de sus páginas. Puede ser un PDF escaneado que necesite OCR.';
+      heading.textContent=pageMatches.length?'Coincidencias en el manual ('+pageMatches.length+' páginas):':'Drive encontró el PDF, pero el visor no pudo extraer texto de sus páginas. Puede ser un PDF escaneado que necesite OCR.';
       box.appendChild(heading);
-      for(const match of pdfMatches.slice(0,40)){
+      for(const match of pageMatches.slice(0,40)){
         const jump=document.createElement('button');jump.type='button';jump.className='settings';jump.style.cssText='display:block;width:100%;text-align:left;margin:6px 0;overflow-wrap:anywhere';
         jump.textContent='Pág. '+match.page+' · '+match.text;
         jump.onclick=()=>{page=match.page;renderPage()};
