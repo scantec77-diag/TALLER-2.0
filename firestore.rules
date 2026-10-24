@@ -175,7 +175,27 @@ service cloud.firestore {
   }
 }
 )
-        && pageId == request.resource.data.fileId + '_' + string(request.resource.data.page)
+        && pageId.matches('^' + request.resource.data.fileId + '_[1-9][0-9]{0,2}
+        && request.resource.data.fileName is string
+        && request.resource.data.fileName.size() <= 300
+        && request.resource.data.page is int
+        && request.resource.data.page >= 1
+        && request.resource.data.page <= 300
+        && request.resource.data.text is string
+        && request.resource.data.text.size() <= 100000
+        && request.resource.data.tokens is list
+        && request.resource.data.tokens.size() <= 800
+        && request.resource.data.sourceModifiedTime is string
+        && request.resource.data.updatedAt == request.time;
+      allow delete: if accessAdmin();
+    }
+    match /roles/{uid} {
+      allow read: if owner(uid);
+      allow write: if false;
+    }
+  }
+}
+)
         && request.resource.data.fileName is string
         && request.resource.data.fileName.size() <= 300
         && request.resource.data.page is int
