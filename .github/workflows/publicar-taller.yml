@@ -38,10 +38,12 @@ jobs:
         shell: bash
         run: |
           mkdir -p _site/assets
-          cp index.html firebase-config.js firebase-messaging-sw.js push-config.js push-notifications.js manual-content-search.js manual-ocr.js _site/
+          cp index.html firebase-config.js firebase-messaging-sw.js push-config.js push-notifications.js manual-content-search.js manual-ocr.js taller-ia.js taller-ia.css _site/
           cp -R assets/. _site/assets/
           touch _site/.nojekyll
           test -f _site/index.html
+          test -f _site/taller-ia.js
+          test -f _site/taller-ia.css
           grep -q 'card-sisu' _site/index.html
 
       - name: Cargar sitio
