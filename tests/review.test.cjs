@@ -47,7 +47,7 @@ test('notes finish saving after leaving the screen without touching a missing st
  await timer();assert.equal(written.content,'saved after navigation');
 });
 test('late PDF response does not overwrite a newer view',async()=>{
- const start=html.indexOf('async function openDriveFile(file){'),end=html.indexOf('\nfunction settings()',start);
+ const start=html.indexOf('async function openDriveFile(file,'),end=html.indexOf('\nfunction settings()',start);
  const screen={isConnected:true};let resolve,created=0;
  const ctx={driveListVersion:0,activeUser:{uid:'u'},clearPdfPreview(){},recordLibraryVisit(){},driveTrail:[],driveFileLink:()=>'',view:{innerHTML:''},folderHeader:()=>'',esc:x=>x,bindTrailButtons(){},document:{getElementById:()=>screen},driveRequest:()=>new Promise(r=>resolve=r),URL:{createObjectURL(){created++;return 'blob:test'}},Blob};
  vm.createContext(ctx);vm.runInContext(html.slice(start,end),ctx);
