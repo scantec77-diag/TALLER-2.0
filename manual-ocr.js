@@ -48,7 +48,9 @@ async function writePageRecords(db,records){
  for(let offset=0;offset<records.length;offset+=WRITE_CHUNK){const batch=writeBatch(db);records.slice(offset,offset+WRITE_CHUNK).forEach(record=>batch.set(doc(db,OCR_PAGES,record.id),record.data));await batch.commit()}
 }
 async function renderPageCanvas(pdf,pageNumber){
- const page=await pdf.getPage(pageNumber),viewport=page.getViewport({scale:1.7}),canvas=document.createElement('canvas');
+ const page=await pdf.getPage(pageNumber),natural=page.getViewport({scale:1});
+ const scale=Math.min(1.7,2600/natural.width,3200/natural.height,Math.sqrt(8000000/(natural.width*natural.height)));
+ const viewport=page.getViewport({scale}),canvas=document.createElement('canvas');
  canvas.width=Math.ceil(viewport.width);canvas.height=Math.ceil(viewport.height);
  await page.render({canvasContext:canvas.getContext('2d',{willReadFrequently:true}),viewport}).promise;return canvas;
 }
