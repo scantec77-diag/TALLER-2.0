@@ -1,24 +1,28 @@
 # Búsqueda dentro de manuales PDF y Word
 
-## Qué hace esta etapa
+## Qué hace
 
-- Agrega **Buscar dentro de manuales** a la portada de Taller 2.0.
-- Usa la búsqueda de texto completo de Drive para localizar contenido indexado en PDF, DOC, DOCX y Google Docs.
-- Solo muestra archivos que cuelgan de las carpetas de manuales configuradas en Taller 2.0.
-- Al abrir un PDF, PDF.js revisa sus páginas, informa dónde aparece el texto y permite saltar a cada página coincidente.
-- Al abrir un DOCX, extrae el texto en el navegador y muestra los párrafos coincidentes. Los Google Docs se exportan como texto para mostrar los párrafos encontrados.
-- Los archivos Word DOC antiguos se localizan mediante Drive y se abren allí para consultar el contenido.
-- No copia manuales al repositorio ni procesa toda la biblioteca en una búsqueda. Solo se descarga el documento que la persona abre.
+- **Buscar dentro de manuales** consulta PDF, DOC, DOCX y Google Docs en las carpetas configuradas.
+- Drive aporta el texto indexado de documentos digitales. El visor busca por página en PDF y muestra párrafos coincidentes en DOCX y Google Docs.
+- El OCR agrega texto de páginas escaneadas a un índice compartido en Firestore. Los resultados muestran el PDF y las páginas donde se encontró cada término.
+- El administrador inicia la indexación desde la pantalla de búsqueda. El procesamiento se hace en su navegador con PDF.js y Tesseract.js en español e inglés.
+- Las páginas con texto digital suficiente se omiten. Se vuelven a procesar los PDF si Drive informa una fecha de modificación nueva; los demás se saltan.
+- Los manuales permanecen en Drive y no se copian al repositorio ni se envían a un servicio externo de OCR.
 
-## Límites de esta etapa
+## Uso del OCR
 
-- La búsqueda de Drive trabaja sobre el texto que Drive pudo indexar. Una búsqueda por parte de una palabra puede no encontrarla.
-- Un PDF escaneado como imagen puede no tener texto indexado o extraíble. El OCR para esos archivos queda para la siguiente etapa.
-- Se muestran hasta 100 resultados ordenados; la búsqueda recorre las páginas de resultados que devuelve Drive.
-- Esta función ayuda a localizar documentos y páginas. Todavía no indexa fragmentos para que Taller IA cite el contenido de los manuales.
+1. El administrador abre **Buscar dentro de manuales** y presiona **Indexar PDF escaneados**.
+2. Deja la pantalla abierta hasta que termine. Puede detener el trabajo; la próxima ejecución retoma los PDF que falten.
+3. Los usuarios con sesión verificada buscan desde la misma pantalla. El resultado OCR lleva al visor y muestra las páginas coincidentes.
 
-## Activación
+La primera pasada puede demorar según cantidad y tamaño de los PDF. El procesamiento tiene límites de 60 MB por archivo, 300 páginas por PDF y 2.500 PDF por ejecución. Se necesita Internet para cargar Tesseract.js y su modelo de idiomas.
 
-La implementación está en la rama `feature/busqueda-texto-manuales-20261024`. Para verla en GitHub Pages hay que revisar e integrar esa rama con `main`; la rama no publica cambios por sí sola.
+## Acceso a los datos
 
-La búsqueda usa la autorización de lectura de Drive que ya tiene el visor. No guarda contraseñas ni sube los manuales al repositorio.
+Firestore permite leer el índice a usuarios con correo verificado y escribirlo solo a la cuenta con rol admin en `/roles/{uid}`. Se guardan texto y tokens por página, nombre del PDF, número de página y fecha de modificación de Drive.
+
+## Límites
+
+- El OCR puede confundir caracteres, especialmente en fotos borrosas, torcidas o de baja resolución.
+- La búsqueda OCR encuentra palabras normalizadas; todavía no admite búsqueda semántica ni citas para Taller IA.
+- Se muestran hasta 100 resultados; el índice devuelve hasta 300 páginas coincidentes por búsqueda.

@@ -43,7 +43,7 @@ const SEARCHABLE_MIMES = [
   'application/vnd.google-apps.document'
 ];
 
-export function showManualContentSearch({view, request, rootIds, openFile, home}) {
+export function showManualContentSearch({view, request, rootIds, openFile, home, searchOcrPages, onStartOcr, isAdmin}) {
   const roots = new Set((rootIds || []).filter(id =>
     typeof id === 'string' && /^[A-Za-z0-9_-]{8,160}$/.test(id)));
   view.innerHTML = '<button class="back" id="manualSearchBack" type="button">← Volver</button>' +
@@ -52,8 +52,35 @@ export function showManualContentSearch({view, request, rootIds, openFile, home}
     '<form id="manualSearchForm"><label>Palabras o código de falla<input id="manualSearchQuery" type="search" maxlength="120" placeholder="Ej.: presión de aceite o P0340" required></label>' +
     '<button class="settings" id="manualSearchButton" type="submit">Buscar en PDF y Word</button></form>' +
     '<p id="manualSearchStatus" role="status"></p><div id="manualSearchResults"></div>' +
-    '<small>Los documentos escaneados como imagen se incorporarán en una etapa posterior con OCR.</small>';
+    (isAdmin ? '<section style="margin:18px 0;padding:12px;border:1px solid #405c7a;border-radius:9px"><h3>OCR de PDF escaneados</h3><p>Indexa el texto de las páginas escaneadas para que toda la biblioteca pueda buscarlas. Se procesa en este dispositivo y puede tardar; conviene dejar la pantalla abierta.</p><button class="settings" id="manualOcrStart" type="button">Indexar PDF escaneados</button> <button class="back" id="manualOcrStop" type="button" disabled>Detener</button><p id="manualOcrStatus" role="status"></p></section>' : '<small>Los PDF escaneados también aparecen aquí después de que el administrador complete la indexación OCR.</small>');
   document.getElementById('manualSearchBack').onclick = home;
+  if (isAdmin && typeof onStartOcr === 'function') {
+    const start = document.getElementById('manualOcrStart'), stop = document.getElementById('manualOcrStop');
+    const ocrStatus = document.getElementById('manualOcrStatus');
+    let running = false, stopRequested = false;
+    start.onclick = async () => {
+      if (running) return;
+      running = true; stopRequested = false; start.disabled = true; stop.disabled = false;
+      ocrStatus.textContent = 'Iniciando OCR…';
+      try {
+        const result = await onStartOcr({
+          report: message => { if (ocrStatus.isConnected) ocrStatus.textContent = message; },
+          shouldStop: () => stopRequested
+        });
+        if (ocrStatus.isConnected) ocrStatus.textContent =
+          'Terminado. PDF procesados: ' + result.processed + ' · ya actualizados: ' + result.skipped +
+          ' · páginas OCR: ' + result.ocrPages + ' · errores: ' + result.errors +
+          (result.stopped ? ' · detenido' : '');
+      } catch (error) {
+        if (ocrStatus.isConnected) ocrStatus.textContent = 'No se pudo completar el OCR: ' + (error.message || 'error desconocido');
+      } finally {
+        running = false;
+        if (start.isConnected) start.disabled = false;
+        if (stop.isConnected) stop.disabled = true;
+      }
+    };
+    stop.onclick = () => { stopRequested = true; stop.disabled = true; ocrStatus.textContent = 'Deteniendo después de la página actual…'; };
+  }
   const form = document.getElementById('manualSearchForm');
   const input = document.getElementById('manualSearchQuery');
   const button = document.getElementById('manualSearchButton');
@@ -70,7 +97,7 @@ export function showManualContentSearch({view, request, rootIds, openFile, home}
     if (!roots.size) { status.textContent = 'No hay carpetas de manuales configuradas.'; return; }
     button.disabled = true;
     results.replaceChildren();
-    status.textContent = 'Buscando en el contenido de PDF y Word…';
+    status.textContent = 'Buscando en PDF, Word y páginas OCR…';
     try {
       const textClause = '(' + terms.map(term => "fullText contains '" + escapeDriveTerm(term) + "'").join(' or ') + ')';
       const typeClause = '(' + SEARCHABLE_MIMES.map(mime => "mimeType = '" + mime + "'").join(' or ') + ')';
@@ -91,10 +118,36 @@ export function showManualContentSearch({view, request, rootIds, openFile, home}
         status.textContent = 'Drive encontró ' + all.length + ' archivos. Revisando que pertenezcan a la biblioteca…';
       } while (pageToken);
       const matches = [];
+      const byId = new Map();
       for (let i = 0; i < all.length; i++) {
         if (searchId !== requestNumber) return;
         if (i % 20 === 0) status.textContent = 'Revisando archivos de la biblioteca… ' + (i + 1) + ' de ' + all.length;
-        if (await inLibrary(request, all[i], roots, parentCache)) matches.push(all[i]);
+        if (await inLibrary(request, all[i], roots, parentCache)) { matches.push(all[i]); byId.set(all[i].id, all[i]); }
+      }
+      if (searchId !== requestNumber) return;
+      let ocrError = false;
+      if (typeof searchOcrPages === 'function') {
+        try {
+          const pages = await searchOcrPages(terms), grouped = new Map();
+          for (const page of pages) {
+            if (!grouped.has(page.fileId)) grouped.set(page.fileId, []);
+            grouped.get(page.fileId).push({page: page.page, score: page.score || 0, text: String(page.text || '').slice(0, 220)});
+          }
+          for (const [fileId, ocrMatches] of grouped) {
+            let file = byId.get(fileId);
+            if (!file) {
+              const params = new URLSearchParams({fields: 'id,name,mimeType,size,modifiedTime,parents,webViewLink'});
+              const response = await request('https://www.googleapis.com/drive/v3/files/' + encodeURIComponent(fileId) + '?' + params);
+              file = await response.json();
+              if (!file.id || !await inLibrary(request, file, roots, parentCache)) continue;
+              matches.push(file); byId.set(fileId, file);
+            }
+            file.ocrMatches = ocrMatches.sort((a,b)=>b.score-a.score||a.page-b.page);
+          }
+        } catch (error) {
+          console.warn('No se pudieron consultar las páginas OCR:', error);
+          ocrError = true;
+        }
       }
       if (searchId !== requestNumber) return;
       const sorted = matches.sort((a,b) => {
@@ -108,7 +161,7 @@ export function showManualContentSearch({view, request, rootIds, openFile, home}
           : 'No se encontraron documentos con esas palabras. Probá con otra palabra o código.';
         return;
       }
-      status.textContent = sorted.length + ' documentos encontrados en la biblioteca.' +
+      status.textContent = sorted.length + ' documentos encontrados en la biblioteca.' + (ocrError ? ' La búsqueda OCR no está disponible en este momento.' : '') +
         (sorted.length > 100 ? ' Mostrando los primeros 100.' : '');
       const fragment = document.createDocumentFragment();
       for (const file of sorted.slice(0, 100)) {
@@ -119,7 +172,7 @@ export function showManualContentSearch({view, request, rootIds, openFile, home}
         const icon = file.mimeType === 'application/pdf' ? '📕 ' :
           file.mimeType === 'application/vnd.google-apps.document' ? '📝 ' : '📄 ';
         item.textContent = icon + file.name;
-        item.onclick = () => openFile(file, queryText);
+        item.onclick = () => openFile(file, queryText, file.ocrMatches || []);
         fragment.appendChild(item);
       }
       results.replaceChildren(fragment);
