@@ -866,16 +866,81 @@ async function browseDriveFolder(){
     if(version===driveListVersion&&driveListing){driveListing.loading=false;paintDriveFiles()}
   }
 }
+let mammothLoadPromise=null;
+function loadMammoth(){
+ if(window.mammoth?.extractRawText)return Promise.resolve(window.mammoth);
+ if(mammothLoadPromise)return mammothLoadPromise;
+ mammothLoadPromise=new Promise((resolve,reject)=>{
+  const script=document.createElement('script');
+  script.src='https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.9.1/mammoth.browser.min.js';
+  script.onload=()=>window.mammoth?.extractRawText?resolve(window.mammoth):reject(Error('No se pudo iniciar el lector DOCX.'));
+  script.onerror=()=>reject(Error('No se pudo cargar el lector DOCX.'));
+  document.head.appendChild(script);
+ });
+ return mammothLoadPromise;
+}
+function normalizeManualText(value){
+ return String(value||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
+}
+function showWordTextMatches(status,text,searchText){
+ const terms=[...new Set(normalizeManualText(searchText).match(/[a-z0-9_-]{2,}/g)||[])].slice(0,8);
+ const paragraphs=String(text||'').split(/\n+/).map(s=>s.replace(/\s+/g,' ').trim()).filter(Boolean);
+ const matches=paragraphs.map((value,index)=>{
+  const norm=normalizeManualText(value),score=terms.filter(term=>norm.includes(term)).length;
+  return {value,index,score};
+ }).filter(x=>x.score).sort((a,b)=>b.score-a.score||a.index-b.index);
+ if(!matches.length){
+  status.textContent='Drive encontró el Word, pero no pude extraer una coincidencia local. Abrilo en Drive y usá “Buscar” dentro del documento.';
+  return;
+ }
+ status.textContent=matches.length+' párrafos coinciden con la búsqueda:';
+ const box=document.createElement('section');
+ box.style.cssText='margin:12px 0;padding:10px;border:1px solid #405c7a;border-radius:9px;background:#142337';
+ for(const match of matches.slice(0,30)){
+  const p=document.createElement('p');
+  p.textContent='Párrafo '+(match.index+1)+' · '+match.value.slice(0,500);
+  box.appendChild(p);
+ }
+ status.after(box);
+}
 async function openDriveFile(file,searchText=''){
   const version=++driveListVersion;
   clearPdfPreview();
   recordLibraryVisit('file',file.id,file.name,[...driveTrail.map(x=>x.name),file.name].join(' / '));
   const driveLink=driveFileLink(file);
   if(file.mimeType!=='application/pdf'&&!/\.pdf$/i.test(file.name)){
+    const isDocx=file.mimeType==='application/vnd.openxmlformats-officedocument.wordprocessingml.document'||/\.docx$/i.test(file.name);
+    const isGoogleDoc=file.mimeType==='application/vnd.google-apps.document';
+    const wordStatusId='wordStatus';
     view.innerHTML=folderHeader()+'<h2>'+esc(file.name)+'</h2>'+
-      '<p>Este documento se abre en su aplicación compatible.</p>'+
-      '<p><a target="_blank" rel="noopener" href="'+driveLink+'">Abrir documento ↗</a></p>';
-    bindTrailButtons();return;
+      '<p id="'+wordStatusId+'" role="status">'+(searchText?'Drive encontró este documento. Leyendo el texto…':'Este documento se abre en su aplicación compatible.')+'</p>'+
+      '<p><a target="_blank" rel="noopener" href="'+driveLink+'">Abrir documento en Google Drive ↗</a></p>';
+    bindTrailButtons();
+    if(searchText&&(isDocx||isGoogleDoc)){
+      const status=document.getElementById(wordStatusId);
+      try{
+        let text='';
+        if(isDocx){
+          if(Number(file.size)>25000000)throw Error('El archivo supera el límite de vista previa de 25 MB.');
+          const response=await driveRequest('https://www.googleapis.com/drive/v3/files/'+encodeURIComponent(file.id)+'?alt=media');
+          const buffer=await response.arrayBuffer();
+          const mammoth=await loadMammoth();
+          text=(await mammoth.extractRawText({arrayBuffer:buffer})).value||'';
+        }else{
+          const response=await driveRequest('https://www.googleapis.com/drive/v3/files/'+encodeURIComponent(file.id)+'/export?mimeType=text%2Fplain');
+          text=await response.text();
+        }
+        if(version!==driveListVersion||!status?.isConnected)return;
+        showWordTextMatches(status,text,searchText);
+      }catch(error){
+        if(version!==driveListVersion||!status?.isConnected)return;
+        status.textContent='No se pudo leer el texto en esta pantalla ('+error.message+'). Drive sí encontró el documento; podés abrirlo y buscar allí.';
+      }
+    }else if(searchText){
+      const status=document.getElementById(wordStatusId);
+      if(status)status.textContent='Drive encontró el Word. Abrilo en Drive para ver la coincidencia; los archivos DOC antiguos todavía no tienen vista de texto aquí.';
+    }
+    return;
   }
   view.innerHTML=folderHeader()+'<h2>'+esc(file.name)+'</h2>'+
     '<p id="pdfStatus" role="status">Cargando PDF…</p>'+
