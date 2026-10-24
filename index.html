@@ -76,6 +76,7 @@ import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.14.1/fireba
 import { getAuth, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, linkWithPopup, reauthenticateWithPopup, signOut } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js';
 import { getFirestore, doc, getDoc, setDoc, collection, getDocs, increment, serverTimestamp, addDoc, query, orderBy, limit, startAfter, onSnapshot, writeBatch } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js';
 import { firebaseConfig } from './firebase-config.js';
+import { PUSH_DISPATCH_URL } from './push-dispatch-config.js';
 import { showPushSettings, refreshPushRegistration, forgetPushRegistration } from './push-notifications.js';
 const app=initializeApp(firebaseConfig),auth=getAuth(app),db=getFirestore(app);
 const driveApp=initializeApp(firebaseConfig,'taller20-drive-reader'),driveAuth=getAuth(driveApp);
@@ -479,6 +480,18 @@ async function compressCommonPhoto(file){
     throw Error('No se pudo reducir la foto. Elegí otra imagen.');
   }finally{URL.revokeObjectURL(url)}
 }
+async function notifyNewCommonMessage(user,messageId){
+  if(!PUSH_DISPATCH_URL||!/^https:\/\//.test(PUSH_DISPATCH_URL))return;
+  try{
+    const idToken=await user.getIdToken();
+    const response=await fetch(PUSH_DISPATCH_URL,{
+      method:'POST',
+      headers:{'Content-Type':'application/json','Authorization':'Bearer '+idToken},
+      body:JSON.stringify({messageId})
+    });
+    if(!response.ok)console.warn('No se pudo enviar el aviso push:',response.status);
+  }catch(error){console.warn('No se pudo enviar el aviso push:',error.message||error)}
+}
 function commonSpace(){
   if(!activeUser)return;
   const user=activeUser;
@@ -609,6 +622,8 @@ function commonSpace(){
       batch.set(ref,message);
       photos.forEach((dataUrl,i)=>batch.set(doc(db,'commonMessages',ref.id,'photos',String(i)),{authorId:user.uid,dataUrl,createdAt:serverTimestamp()}));
       await batch.commit();
+      // El mensaje queda guardado aunque falle el envío de la notificación.
+      void notifyNewCommonMessage(user,ref.id);
       if(!current())return;
       input.value='';photos=[];count();sendStatus.textContent='Publicación guardada ✓';
       await loadMessages();
