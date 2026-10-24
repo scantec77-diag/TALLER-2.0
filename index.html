@@ -903,15 +903,15 @@ async function openDriveFile(file,searchText=''){
     lib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
     const pdf=await lib.getDocument({url:pdfObjectUrl,isEvalSupported:false}).promise;
     if(!current())return;
-    const queryTerms=[...new Set(String(searchText||'').normalize('NFD').replace(/[\\u0300-\\u036f]/g,'').toLowerCase().match(/[a-z0-9_-]{2,}/g)||[])].slice(0,8);
+    const queryTerms=[...new Set(String(searchText||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().match(/[a-z0-9_-]{2,}/g)||[])].slice(0,8);
     const pdfMatches=[];
     if(queryTerms.length){
       status.textContent='Buscando coincidencias en las páginas del PDF…';
       for(let p=1;p<=pdf.numPages;p++){
         if(!current())return;
         const pageObj=await pdf.getPage(p),content=await pageObj.getTextContent();
-        const pageText=content.items.map(item=>item.str||'').join(' ').replace(/\\s+/g,' ').trim();
-        const pageNorm=pageText.normalize('NFD').replace(/[\\u0300-\\u036f]/g,'').toLowerCase();
+        const pageText=content.items.map(item=>item.str||'').join(' ').replace(/\s+/g,' ').trim();
+        const pageNorm=pageText.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
         const score=queryTerms.filter(term=>pageNorm.includes(term)).length;
         if(score)pdfMatches.push({page:p,score,text:pageText.slice(0,220)});
       }
@@ -978,5 +978,5 @@ function renderList(){document.getElementById('machineList').innerHTML=config.ma
 function persist(){try{localStorage.setItem(KEY,JSON.stringify(config))}catch(e){console.warn('No se pudo guardar la configuración local.',e)}}function saveRoot(){if(!isAdmin)return;config.root=folderId(document.getElementById('root').value);persist();home()}
 function addMachine(){if(!isAdmin)return;const name=document.getElementById('machineName').value.trim(),folder=folderId(document.getElementById('machineFolder').value);if(!name||!folder){alert('Completá nombre y carpeta.');return}config.root=folderId(document.getElementById('root').value);if(!/^[A-Za-z0-9_-]{8,160}$/.test(folder)){alert("Ingresá un enlace o ID válido de carpeta de Drive.");return}config.removed=config.removed.filter(id=>id!==folder);if(!config.machines.some(m=>m.folder===folder))config.machines.push({name,folder});persist();settings()}
 function removeMachine(i){if(!isAdmin||!config.machines[i])return;config.removed.push(config.machines[i].folder);config.machines.splice(i,1);persist();settings()}
-Object.assign(window,{home,notes,commonSpace,tallerIA,pushSettings,openMachine,settings,addMachine,removeMachine,saveRoot,manageConnection,accessDashboard});
+Object.assign(window,{home,notes,commonSpace,tallerIA,manualContentSearch,pushSettings,openMachine,settings,addMachine,removeMachine,saveRoot,manageConnection,accessDashboard});
 </script></body></html>
