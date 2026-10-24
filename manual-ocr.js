@@ -2,7 +2,7 @@ import { collection, doc, getDoc, getDocs, query, where, limit, writeBatch, serv
 const OCR_FILES='manualOcrFiles', OCR_PAGES='manualOcrPages';
 const MAX_PDF_BYTES=60*1024*1024, MAX_PDF_PAGES=300, MAX_PDFS_PER_RUN=2500, MAX_FOLDERS_PER_RUN=5000, WRITE_CHUNK=100;
 function termsFor(value){return [...new Set(String(value||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().match(/[a-z0-9_-]{2,}/g)||[])].slice(0,8)}
-function tokensFor(value){return termsFor(value).slice(0,800)}
+function tokensFor(value){return [...new Set(normalized(value).match(/[a-z0-9_-]{2,}/g)||[])].slice(0,800)}
 function normalized(value){return String(value||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase()}
 function safeId(value){return /^[A-Za-z0-9_-]{8,160}$/.test(String(value||''))}
 function reportTo(report,message){if(typeof report==='function')report(message)}
@@ -72,9 +72,9 @@ export async function indexScannedManuals({db,request,rootIds,report=()=>{},shou
    try{
     const stateSnapshot=await getDoc(stateRef),prior=stateSnapshot.exists()?stateSnapshot.data():{},modifiedTime=String(file.modifiedTime||'');
     if(['complete','no-text'].includes(prior.status)&&prior.modifiedTime===modifiedTime){skipped++;continue}
-    if(Number(file.size)>MAX_PDF_BYTES)throw Error('Supera el límite de 60 MB.');
     reportTo(report,'Procesando '+(fileIndex+1)+' de '+files.length+': '+file.name);
     await removeOldPages(db,file.id);
+    if(Number(file.size)>MAX_PDF_BYTES)throw Error('Supera el límite de 60 MB.');
     const started=writeBatch(db);
     started.set(stateRef,{fileId:file.id,fileName:String(file.name||'').slice(0,300),modifiedTime,status:'processing',pageCount:0,ocrPageCount:0,updatedAt:serverTimestamp()});
     await started.commit();
