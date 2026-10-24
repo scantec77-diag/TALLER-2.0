@@ -50,7 +50,7 @@ export function showManualContentSearch({view, request, rootIds, openFile, home,
     '<h2>🔎 Buscar dentro de los manuales</h2>' +
     '<p>Busca palabras y códigos dentro del texto de los PDF, Word y Google Docs de las carpetas configuradas. En los PDF también muestra las páginas coincidentes.</p>' +
     '<form id="manualSearchForm"><label>Palabras o código de falla<input id="manualSearchQuery" type="search" maxlength="120" placeholder="Ej.: presión de aceite o P0340" required></label>' +
-    '<button class="settings" id="manualSearchButton" type="submit">Buscar en PDF y Word</button></form>' +
+    '<button class="settings" id="manualSearchButton" type="submit">Buscar en PDF, Word y OCR</button></form>' +
     '<p id="manualSearchStatus" role="status"></p><div id="manualSearchResults"></div>' +
     (isAdmin ? '<section style="margin:18px 0;padding:12px;border:1px solid #405c7a;border-radius:9px"><h3>OCR de PDF escaneados</h3><p>Indexa el texto de las páginas escaneadas para que toda la biblioteca pueda buscarlas. Se procesa en este dispositivo y puede tardar; conviene dejar la pantalla abierta.</p><button class="settings" id="manualOcrStart" type="button">Indexar PDF escaneados</button> <button class="back" id="manualOcrStop" type="button" disabled>Detener</button><p id="manualOcrStatus" role="status"></p></section>' : '<small>Los PDF escaneados también aparecen aquí después de que el administrador complete la indexación OCR.</small>');
   document.getElementById('manualSearchBack').onclick = home;
