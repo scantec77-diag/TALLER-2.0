@@ -872,7 +872,7 @@ function loadMammoth(){
  if(mammothLoadPromise)return mammothLoadPromise;
  mammothLoadPromise=new Promise((resolve,reject)=>{
   const script=document.createElement('script');
-  script.src='https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.9.1/mammoth.browser.min.js';
+  script.src='https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.13.0/mammoth.browser.min.js';
   script.onload=()=>window.mammoth?.extractRawText?resolve(window.mammoth):reject(Error('No se pudo iniciar el lector DOCX.'));
   script.onerror=()=>reject(Error('No se pudo cargar el lector DOCX.'));
   document.head.appendChild(script);
