@@ -148,13 +148,8 @@ service cloud.firestore {
         && request.resource.data.keys().hasOnly(['fileId','fileName','modifiedTime','status','pageCount','ocrPageCount','error','updatedAt'])
         && request.resource.data.keys().hasAll(['fileId','fileName','modifiedTime','status','updatedAt'])
         && request.resource.data.fileId == fileId
-        && fileId.matches('^[A-Za-z0-9_-]{8,160}
-      allow read: if owner(uid);
-      allow write: if false;
-    }
-  }
-}
-)
+        && fileId.size() >= 8 && fileId.size() <= 160
+        && fileId.matches('[A-Za-z0-9_-]+')
         && request.resource.data.fileName is string
         && request.resource.data.fileName.size() <= 300
         && request.resource.data.modifiedTime is string
@@ -168,34 +163,9 @@ service cloud.firestore {
         && request.resource.data.keys().hasOnly(['fileId','fileName','page','text','tokens','sourceModifiedTime','updatedAt'])
         && request.resource.data.keys().hasAll(['fileId','fileName','page','text','tokens','sourceModifiedTime','updatedAt'])
         && request.resource.data.fileId is string
-        && request.resource.data.fileId.matches('^[A-Za-z0-9_-]{8,160}
-      allow read: if owner(uid);
-      allow write: if false;
-    }
-  }
-}
-)
-        && pageId.matches('^' + request.resource.data.fileId + '_[1-9][0-9]{0,2}
-        && request.resource.data.fileName is string
-        && request.resource.data.fileName.size() <= 300
-        && request.resource.data.page is int
-        && request.resource.data.page >= 1
-        && request.resource.data.page <= 300
-        && request.resource.data.text is string
-        && request.resource.data.text.size() <= 100000
-        && request.resource.data.tokens is list
-        && request.resource.data.tokens.size() <= 800
-        && request.resource.data.sourceModifiedTime is string
-        && request.resource.data.updatedAt == request.time;
-      allow delete: if accessAdmin();
-    }
-    match /roles/{uid} {
-      allow read: if owner(uid);
-      allow write: if false;
-    }
-  }
-}
-)
+        && request.resource.data.fileId.size() >= 8 && request.resource.data.fileId.size() <= 160
+        && request.resource.data.fileId.matches('[A-Za-z0-9_-]+')
+        && pageId.matches(request.resource.data.fileId + '_[1-9][0-9]{0,2}')
         && request.resource.data.fileName is string
         && request.resource.data.fileName.size() <= 300
         && request.resource.data.page is int
