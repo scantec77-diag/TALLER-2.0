@@ -76,6 +76,7 @@ import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.14.1/fireba
 import { getAuth, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, linkWithPopup, reauthenticateWithPopup, signOut } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js';
 import { getFirestore, doc, getDoc, setDoc, collection, getDocs, increment, serverTimestamp, addDoc, query, orderBy, limit, startAfter, onSnapshot, writeBatch } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js';
 import { firebaseConfig } from './firebase-config.js';
+import { showManualContentSearch } from './manual-content-search.js';
 import { showPushSettings, refreshPushRegistration, forgetPushRegistration } from './push-notifications.js';
 const app=initializeApp(firebaseConfig),auth=getAuth(app),db=getFirestore(app);
 const driveApp=initializeApp(firebaseConfig,'taller20-drive-reader'),driveAuth=getAuth(driveApp);
@@ -631,10 +632,28 @@ function tallerIA(){if(activeUser)openTallerIA({app,view,user:activeUser,home});
 function home(){
  if(!activeUser)return;
  driveListVersion++;currentMachineIndex=null;clearPdfPreview();
- view.innerHTML='<button class="settings" onclick="notes()">📝 Mi espacio</button><button class="settings" onclick="commonSpace()">💬 ESPACIO COMUN</button><button class="settings" onclick="tallerIA()">🤖 Taller IA</button><button class="settings" onclick="pushSettings()">🔔 Notificaciones</button>'+
+ view.innerHTML='<button class="settings" onclick="notes()">📝 Mi espacio</button><button class="settings" onclick="commonSpace()">💬 ESPACIO COMUN</button><button class="settings" onclick="tallerIA()">🤖 Taller IA</button><button class="settings" onclick="manualContentSearch()">🔎 Buscar dentro de manuales</button><button class="settings" onclick="pushSettings()">🔔 Notificaciones</button>'+
   (isAdmin?'<button class="settings" onclick="settings()">⚙️ Configuración</button><button class="settings" onclick="manageConnection()">🔗 Gestionar conexión</button><button class="settings" onclick="accessDashboard()">👥 Accesos</button>':'')+
   '<h2>Máquinas</h2><div class="grid">'+
   (config.machines.map((m,i)=>{const portada=/^P(?:0[2-9]|10)$/i.test(String(m.name).trim());const sisu=m.folder==='1DMljuYrC-amjtpbqaLIaEgKtMV7qd8Yz'||String(m.name).trim().toUpperCase()==='SISU';const info=m.folder==='1VeBO1uH2mimy2PEJ07gCOpLQY0t2xGg_'||String(m.name).trim().toUpperCase()==='INFO';const hyster=m.folder==='1FOgvdSfJZ9AlsTml2I1yU0ROJhcKXSCI'||String(m.name).trim().toUpperCase()==='HYSTER';const konecranes=m.folder==='1Js5uk-b2RtAfM18PWFg6qZ4U8Rpb6ob5'||String(m.name).trim().toUpperCase()==='KONECRANES';const linde=m.folder==='17MpMCCTBXCTsANG_UkbEqTZR5pnhPAKf'||String(m.name).trim().toUpperCase()==='LINDE';return '<button class="card'+(info?' card-info':hyster?' card-hyster':konecranes?' card-konecranes':linde?' card-linde':'')+(portada?' card-portada':'')+(sisu?' card-sisu':'')+'" onclick="openMachine('+i+')">'+(hyster?'<span class="hyster-label">'+esc(m.name)+'</span>':linde?'<span class="linde-label">'+esc(m.name)+'</span>':esc(m.name))+'</button>'}).join('')||'<p>Agregá la primera máquina desde Configuración.</p>')+'</div>';
+}
+async function manualContentSearch(){
+ if(!activeUser)return;
+ if(!driveAccessToken||Date.now()>driveTokenExpiry){
+  view.innerHTML='<button class="back" type="button" onclick="home()">← Volver</button><h2>🔎 Buscar dentro de los manuales</h2><p id="manualConnectStatus" role="status">Conectando con la cuenta autorizada de manuales…</p>';
+  try{await authorizeDriveAccount()}catch(e){
+   const status=document.getElementById('manualConnectStatus');
+   if(status)status.textContent=errors[e?.code]||e.message||'No se pudo conectar con Drive.';
+   return;
+  }
+ }
+ driveTrail=[];
+ showManualContentSearch({
+  view,request:driveRequest,
+  rootIds:[config.root,...config.machines.map(m=>m.folder)],
+  openFile:(file,query)=>openDriveFile(file,query),
+  home
+ });
 }
 function clearPdfPreview(){if(pdfObjectUrl){URL.revokeObjectURL(pdfObjectUrl);pdfObjectUrl=null}}
 function externalDriveLink(id){return '<p><a href="'+folderUrl(id)+'" target="_blank" rel="noopener">Abrir en Google Drive ↗</a></p>'}
@@ -847,16 +866,81 @@ async function browseDriveFolder(){
     if(version===driveListVersion&&driveListing){driveListing.loading=false;paintDriveFiles()}
   }
 }
-async function openDriveFile(file){
+let mammothLoadPromise=null;
+function loadMammoth(){
+ if(window.mammoth?.extractRawText)return Promise.resolve(window.mammoth);
+ if(mammothLoadPromise)return mammothLoadPromise;
+ mammothLoadPromise=new Promise((resolve,reject)=>{
+  const script=document.createElement('script');
+  script.src='https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.13.0/mammoth.browser.min.js';
+  script.onload=()=>window.mammoth?.extractRawText?resolve(window.mammoth):reject(Error('No se pudo iniciar el lector DOCX.'));
+  script.onerror=()=>reject(Error('No se pudo cargar el lector DOCX.'));
+  document.head.appendChild(script);
+ });
+ return mammothLoadPromise;
+}
+function normalizeManualText(value){
+ return String(value||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
+}
+function showWordTextMatches(status,text,searchText){
+ const terms=[...new Set(normalizeManualText(searchText).match(/[a-z0-9_-]{2,}/g)||[])].slice(0,8);
+ const paragraphs=String(text||'').split(/\n+/).map(s=>s.replace(/\s+/g,' ').trim()).filter(Boolean);
+ const matches=paragraphs.map((value,index)=>{
+  const norm=normalizeManualText(value),score=terms.filter(term=>norm.includes(term)).length;
+  return {value,index,score};
+ }).filter(x=>x.score).sort((a,b)=>b.score-a.score||a.index-b.index);
+ if(!matches.length){
+  status.textContent='Drive encontró el Word, pero no pude extraer una coincidencia local. Abrilo en Drive y usá “Buscar” dentro del documento.';
+  return;
+ }
+ status.textContent=matches.length+' párrafos coinciden con la búsqueda:';
+ const box=document.createElement('section');
+ box.style.cssText='margin:12px 0;padding:10px;border:1px solid #405c7a;border-radius:9px;background:#142337';
+ for(const match of matches.slice(0,30)){
+  const p=document.createElement('p');
+  p.textContent='Párrafo '+(match.index+1)+' · '+match.value.slice(0,500);
+  box.appendChild(p);
+ }
+ status.after(box);
+}
+async function openDriveFile(file,searchText=''){
   const version=++driveListVersion;
   clearPdfPreview();
   recordLibraryVisit('file',file.id,file.name,[...driveTrail.map(x=>x.name),file.name].join(' / '));
   const driveLink=driveFileLink(file);
   if(file.mimeType!=='application/pdf'&&!/\.pdf$/i.test(file.name)){
+    const isDocx=file.mimeType==='application/vnd.openxmlformats-officedocument.wordprocessingml.document'||/\.docx$/i.test(file.name);
+    const isGoogleDoc=file.mimeType==='application/vnd.google-apps.document';
+    const wordStatusId='wordStatus';
     view.innerHTML=folderHeader()+'<h2>'+esc(file.name)+'</h2>'+
-      '<p>Este documento se abre en su aplicación compatible.</p>'+
-      '<p><a target="_blank" rel="noopener" href="'+driveLink+'">Abrir documento ↗</a></p>';
-    bindTrailButtons();return;
+      '<p id="'+wordStatusId+'" role="status">'+(searchText?'Drive encontró este documento. Leyendo el texto…':'Este documento se abre en su aplicación compatible.')+'</p>'+
+      '<p><a target="_blank" rel="noopener" href="'+driveLink+'">Abrir documento en Google Drive ↗</a></p>';
+    bindTrailButtons();
+    if(searchText&&(isDocx||isGoogleDoc)){
+      const status=document.getElementById(wordStatusId);
+      try{
+        let text='';
+        if(isDocx){
+          if(Number(file.size)>25000000)throw Error('El archivo supera el límite de vista previa de 25 MB.');
+          const response=await driveRequest('https://www.googleapis.com/drive/v3/files/'+encodeURIComponent(file.id)+'?alt=media');
+          const buffer=await response.arrayBuffer();
+          const mammoth=await loadMammoth();
+          text=(await mammoth.extractRawText({arrayBuffer:buffer})).value||'';
+        }else{
+          const response=await driveRequest('https://www.googleapis.com/drive/v3/files/'+encodeURIComponent(file.id)+'/export?mimeType=text%2Fplain');
+          text=await response.text();
+        }
+        if(version!==driveListVersion||!status?.isConnected)return;
+        showWordTextMatches(status,text,searchText);
+      }catch(error){
+        if(version!==driveListVersion||!status?.isConnected)return;
+        status.textContent='No se pudo leer el texto en esta pantalla ('+error.message+'). Drive sí encontró el documento; podés abrirlo y buscar allí.';
+      }
+    }else if(searchText){
+      const status=document.getElementById(wordStatusId);
+      if(status)status.textContent='Drive encontró el Word. Abrilo en Drive para ver la coincidencia; los archivos DOC antiguos todavía no tienen vista de texto aquí.';
+    }
+    return;
   }
   view.innerHTML=folderHeader()+'<h2>'+esc(file.name)+'</h2>'+
     '<p id="pdfStatus" role="status">Cargando PDF…</p>'+
@@ -884,7 +968,21 @@ async function openDriveFile(file){
     lib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
     const pdf=await lib.getDocument({url:pdfObjectUrl,isEvalSupported:false}).promise;
     if(!current())return;
-    let page=1,seq=0,rendering=false;
+    const queryTerms=[...new Set(String(searchText||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().match(/[a-z0-9_-]{2,}/g)||[])].slice(0,8);
+    const pdfMatches=[];
+    if(queryTerms.length){
+      status.textContent='Buscando coincidencias en las páginas del PDF…';
+      for(let p=1;p<=pdf.numPages;p++){
+        if(!current())return;
+        const pageObj=await pdf.getPage(p),content=await pageObj.getTextContent();
+        const pageText=content.items.map(item=>item.str||'').join(' ').replace(/\s+/g,' ').trim();
+        const pageNorm=pageText.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
+        const score=queryTerms.filter(term=>pageNorm.includes(term)).length;
+        if(score)pdfMatches.push({page:p,score,text:pageText.slice(0,220)});
+      }
+      pdfMatches.sort((a,b)=>b.score-a.score||a.page-b.page);
+    }
+    let page=pdfMatches[0]?.page||1,seq=0,rendering=false;
     status.insertAdjacentHTML('afterend','<div id="pdfControls">'+
       '<button class="settings" id="pdfPrev" type="button">← Anterior</button>'+
       '<span id="pdfNumber"></span>'+
@@ -908,7 +1006,7 @@ async function openDriveFile(file){
       canvas.style.height=Math.round(viewport.height/pixelRatio)+'px';
       await one.render({canvasContext:ctx,viewport}).promise;
       if(ticket===seq&&canvas.isConnected){
-        status.textContent='PDF cargado';
+        status.textContent='PDF cargado'+(queryTerms.length?' · '+pdfMatches.length+' páginas con coincidencias':'');
         document.getElementById('pdfNumber').textContent=' Página '+page+' de '+pdf.numPages+' ';
         document.getElementById('pdfPrev').disabled=page<=1;
         document.getElementById('pdfNext').disabled=page>=pdf.numPages;
@@ -918,10 +1016,23 @@ async function openDriveFile(file){
     }
     document.getElementById('pdfPrev').onclick=()=>{if(!rendering&&page>1){page--;renderPage()}};
     document.getElementById('pdfNext').onclick=()=>{if(!rendering&&page<pdf.numPages){page++;renderPage()}};
+    if(queryTerms.length){
+      const box=document.createElement('section');box.style.cssText='margin:12px 0;padding:10px;border:1px solid #405c7a;border-radius:9px;background:#142337';
+      const heading=document.createElement('strong');
+      heading.textContent=pdfMatches.length?'Coincidencias en el manual ('+pdfMatches.length+' páginas):':'Drive encontró el PDF, pero el visor no pudo extraer texto de sus páginas. Puede ser un PDF escaneado que necesite OCR.';
+      box.appendChild(heading);
+      for(const match of pdfMatches.slice(0,40)){
+        const jump=document.createElement('button');jump.type='button';jump.className='settings';jump.style.cssText='display:block;width:100%;text-align:left;margin:6px 0;overflow-wrap:anywhere';
+        jump.textContent='Pág. '+match.page+' · '+match.text;
+        jump.onclick=()=>{page=match.page;renderPage()};
+        box.appendChild(jump);
+      }
+      document.getElementById('pdfControls').after(box);
+    }
     await renderPage();
   }catch(e){
     if(!current())return;
-    if(e.message==='AUTH_NEEDED')return connectDriveScreen();
+    if(e.message==='AUTH_NEEDED')return searchText?manualContentSearch():connectDriveScreen();
     const status=document.getElementById('pdfStatus');
     if(status)status.textContent='No se pudo mostrar el PDF en este dispositivo ('+e.message+
       '). Podés abrirlo mediante el enlace de Google Drive.';
@@ -932,5 +1043,5 @@ function renderList(){document.getElementById('machineList').innerHTML=config.ma
 function persist(){try{localStorage.setItem(KEY,JSON.stringify(config))}catch(e){console.warn('No se pudo guardar la configuración local.',e)}}function saveRoot(){if(!isAdmin)return;config.root=folderId(document.getElementById('root').value);persist();home()}
 function addMachine(){if(!isAdmin)return;const name=document.getElementById('machineName').value.trim(),folder=folderId(document.getElementById('machineFolder').value);if(!name||!folder){alert('Completá nombre y carpeta.');return}config.root=folderId(document.getElementById('root').value);if(!/^[A-Za-z0-9_-]{8,160}$/.test(folder)){alert("Ingresá un enlace o ID válido de carpeta de Drive.");return}config.removed=config.removed.filter(id=>id!==folder);if(!config.machines.some(m=>m.folder===folder))config.machines.push({name,folder});persist();settings()}
 function removeMachine(i){if(!isAdmin||!config.machines[i])return;config.removed.push(config.machines[i].folder);config.machines.splice(i,1);persist();settings()}
-Object.assign(window,{home,notes,commonSpace,tallerIA,pushSettings,openMachine,settings,addMachine,removeMachine,saveRoot,manageConnection,accessDashboard});
+Object.assign(window,{home,notes,commonSpace,tallerIA,manualContentSearch,pushSettings,openMachine,settings,addMachine,removeMachine,saveRoot,manageConnection,accessDashboard});
 </script></body></html>
