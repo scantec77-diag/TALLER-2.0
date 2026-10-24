@@ -1,12 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<vector xmlns:android="http://schemas.android.com/apk/res/android"
-    android:width="108dp" android:height="108dp"
-    android:viewportWidth="108" android:viewportHeight="108">
-    <path android:fillColor="#142337" android:pathData="M0,0 L108,0 L108,108 L0,108 Z" />
-    <path android:fillColor="#72B9EE"
-        android:pathData="M54,16 L62,16 L65,27 L73,31 L83,25 L91,33 L85,43 L89,51 L100,54 L100,62 L89,65 L85,73 L91,83 L83,91 L73,85 L65,89 L62,100 L54,100 L51,89 L43,85 L33,91 L25,83 L31,73 L27,65 L16,62 L16,54 L27,51 L31,43 L25,33 L33,25 L43,31 L51,27 Z" />
-    <path android:fillColor="#142337"
-        android:pathData="M58,38 A20,20 0,1 0,58.01,38 Z" />
-    <path android:fillColor="#FFFFFF"
-        android:pathData="M52,45 L57,45 L63,52 L72,43 L77,48 L63,63 L52,52 Z" />
-</vector>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item><shape android:shape="rectangle"><solid android:color="#142337" /></shape></item>
+    <item><inset android:insetTop="12.5%" android:insetBottom="12.5%"><bitmap android:src="@drawable/taller_foto" android:gravity="fill" android:filter="true" /></inset></item>
+</layer-list>
