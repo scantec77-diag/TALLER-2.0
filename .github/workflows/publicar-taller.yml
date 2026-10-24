@@ -38,7 +38,7 @@ jobs:
         shell: bash
         run: |
           mkdir -p _site/assets
-          cp index.html firebase-config.js firebase-messaging-sw.js push-config.js push-notifications.js _site/
+          cp index.html firebase-config.js firebase-messaging-sw.js push-config.js push-notifications.js manual-content-search.js _site/
           cp -R assets/. _site/assets/
           touch _site/.nojekyll
           test -f _site/index.html
