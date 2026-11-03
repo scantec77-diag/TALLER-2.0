@@ -43,7 +43,7 @@ const SEARCHABLE_MIMES = [
   'application/vnd.google-apps.document'
 ];
 
-export function showManualContentSearch({view, request, rootIds, openFile, home, searchOcrPages, onStartOcr, isAdmin}) {
+export function showManualContentSearch({view, request, rootIds, openFile, home, searchOcrPages, onStartOcr, onReconnect, isAdmin}) {
   const roots = new Set((rootIds || []).filter(id =>
     typeof id === 'string' && /^[A-Za-z0-9_-]{8,160}$/.test(id)));
   view.innerHTML = '<button class="back" id="manualSearchBack" type="button">← Volver</button>' +
@@ -52,27 +52,44 @@ export function showManualContentSearch({view, request, rootIds, openFile, home,
     '<form id="manualSearchForm"><label>Palabras o código de falla<input id="manualSearchQuery" type="search" maxlength="120" placeholder="Ej.: presión de aceite o P0340" required></label>' +
     '<button class="settings" id="manualSearchButton" type="submit">Buscar en PDF, Word y OCR</button></form>' +
     '<p id="manualSearchStatus" role="status"></p><div id="manualSearchResults"></div>' +
-    (isAdmin ? '<section style="margin:18px 0;padding:12px;border:1px solid #405c7a;border-radius:9px"><h3>OCR de PDF escaneados</h3><p>Indexa el texto de las páginas escaneadas para que toda la biblioteca pueda buscarlas. Se procesa en este dispositivo y puede tardar; conviene dejar la pantalla abierta.</p><button class="settings" id="manualOcrStart" type="button">Indexar PDF escaneados</button> <button class="back" id="manualOcrStop" type="button" disabled>Detener</button><p id="manualOcrStatus" role="status"></p></section>' : '<small>Los PDF escaneados también aparecen aquí después de que el administrador complete la indexación OCR.</small>');
+    (isAdmin ? '<section style="margin:18px 0;padding:12px;border:1px solid #405c7a;border-radius:9px"><h3>OCR de PDF escaneados</h3><p>Incluye manuales grandes y de más de 300 páginas. Guarda el avance por bloques y retoma los pendientes. Se procesa en este dispositivo; dejá la pantalla abierta.</p><button class="settings" id="manualOcrStart" type="button">Indexar o reanudar PDF escaneados</button> <button class="back" id="manualOcrStop" type="button" disabled>Detener</button><p id="manualOcrStatus" role="status"></p><div id="manualOcrErrors"></div></section>' : '<small>Los PDF escaneados también aparecen aquí después de que el administrador complete la indexación OCR.</small>');
   document.getElementById('manualSearchBack').onclick = home;
   if (isAdmin && typeof onStartOcr === 'function') {
     const start = document.getElementById('manualOcrStart'), stop = document.getElementById('manualOcrStop');
     const ocrStatus = document.getElementById('manualOcrStatus');
-    let running = false, stopRequested = false;
+    let running = false, stopRequested = false, needsConnection = false;
     start.onclick = async () => {
       if (running) return;
       running = true; stopRequested = false; start.disabled = true; stop.disabled = false;
       ocrStatus.textContent = 'Iniciando OCR…';
       try {
+        // The reconnect popup must start from this user's click, not from a timer.
+        if (needsConnection && typeof onReconnect === 'function') {
+          ocrStatus.textContent = 'Renovando la conexión con los manuales…';
+          await onReconnect();
+          needsConnection = false;
+        }
         const result = await onStartOcr({
           report: message => { if (ocrStatus.isConnected) ocrStatus.textContent = message; },
           shouldStop: () => stopRequested
         });
+        needsConnection = result.pauseReason === 'auth';
+        if (start.isConnected) start.textContent = needsConnection ? '⟳ Reconectar y continuar' : 'Indexar o reanudar PDF escaneados';
         if (ocrStatus.isConnected) ocrStatus.textContent =
-          'Terminado. PDF procesados: ' + result.processed + ' · ya actualizados: ' + result.skipped +
+          (result.paused ? (needsConnection ? 'Pausado: venció la conexión con Drive. Tocá Reconectar y continuar. El avance guardado se conserva.' : 'Pausado: ' + result.pauseMessage + ' El avance guardado se conserva.') : result.stopped ? 'Detenido. Se puede reanudar desde el avance guardado.' : 'Terminado.') + ' PDF procesados: ' + result.processed + ' · ya actualizados: ' + result.skipped +
           ' · páginas OCR: ' + result.ocrPages + ' · errores: ' + result.errors +
-          (result.stopped ? ' · detenido' : '');
+          (result.truncated ? ' · Hay más carpetas o PDF: volvé a ejecutar para continuar la biblioteca.' : '');
+        const errorsBox = document.getElementById('manualOcrErrors');
+        if (errorsBox) {
+          errorsBox.replaceChildren();
+          for (const failure of result.failures || []) {
+            const line = document.createElement('p');
+            line.textContent = failure.fileName + ': ' + failure.error;
+            errorsBox.appendChild(line);
+          }
+        }
       } catch (error) {
-        if (ocrStatus.isConnected) ocrStatus.textContent = 'No se pudo completar el OCR: ' + (error.message || 'error desconocido');
+        if (ocrStatus.isConnected) ocrStatus.textContent = 'No se pudo completar el OCR: ' + (error.message || 'error desconocido') + '. El avance ya guardado se conserva.';
       } finally {
         running = false;
         if (start.isConnected) start.disabled = false;
@@ -186,3 +203,4 @@ export function showManualContentSearch({view, request, rootIds, openFile, home,
     }
   };
 }
+

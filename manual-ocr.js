@@ -1,6 +1,6 @@
 import { collection, doc, getDoc, getDocs, query, where, limit, writeBatch, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js';
 const OCR_FILES='manualOcrFiles', OCR_PAGES='manualOcrPages';
-const MAX_PDF_BYTES=60*1024*1024, MAX_PDF_PAGES=300, MAX_PDFS_PER_RUN=2500, MAX_FOLDERS_PER_RUN=5000, WRITE_CHUNK=100;
+const RANGE_BYTES=1024*1024, CHECKPOINT_PAGES=10, INDEX_VERSION=2, WRITE_CHUNK=100;
 function termsFor(value){return [...new Set(String(value||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().match(/[a-z0-9_-]{2,}/g)||[])].slice(0,8)}
 function tokensFor(value){return [...new Set(normalized(value).match(/[a-z0-9_-]{2,}/g)||[])].slice(0,800)}
 function normalized(value){return String(value||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase()}
@@ -28,7 +28,7 @@ async function listChildren(request,folderId){
 }
 async function discoverPdfs(request,rootIds,shouldStop,report){
  const queue=[...new Set(rootIds.filter(safeId))],visited=new Set(),pdfs=new Map();
- while(queue.length&&visited.size<MAX_FOLDERS_PER_RUN&&pdfs.size<MAX_PDFS_PER_RUN){
+ while(queue.length){
   if(shouldStop())break;
   const folderId=queue.shift();if(visited.has(folderId))continue;visited.add(folderId);
   reportTo(report,'Revisando carpetas de manuales: '+visited.size+(queue.length?' · faltan '+queue.length:''));
@@ -36,7 +36,6 @@ async function discoverPdfs(request,rootIds,shouldStop,report){
   for(const child of children){
    if(child.mimeType==='application/vnd.google-apps.folder')queue.push(child.id);
    else if(child.mimeType==='application/pdf'||/\.pdf$/i.test(child.name||''))pdfs.set(child.id,child);
-   if(pdfs.size>=MAX_PDFS_PER_RUN)break;
   }
  }return [...pdfs.values()];
 }
@@ -46,6 +45,49 @@ async function removeOldPages(db,fileId){
 }
 async function writePageRecords(db,records){
  for(let offset=0;offset<records.length;offset+=WRITE_CHUNK){const batch=writeBatch(db);records.slice(offset,offset+WRITE_CHUNK).forEach(record=>batch.set(doc(db,OCR_PAGES,record.id),record.data));await batch.commit()}
+}
+// PDF.js requests authenticated byte ranges instead of downloading a large PDF
+// in a single arrayBuffer. Authorization is checked again for every range.
+export async function openManualPdf({pdfjs,request,file}){
+ const url='https://www.googleapis.com/drive/v3/files/'+encodeURIComponent(file.id)+'?alt=media';
+ const response=await request(url,{headers:{Range:'bytes=0-'+(RANGE_BYTES-1)}});
+ const initial=new Uint8Array(await response.arrayBuffer());
+ const contentRange=response.headers?.get('Content-Range')||'';
+ const match=contentRange.match(/^bytes\s+0-\d+\/(\d+)$/i);
+ const length=Number(match?.[1]||file.size);
+ let task,lastError=null,closed=false;
+ const controllers=new Set();
+ if(response.status===206&&Number.isSafeInteger(length)&&length>initial.byteLength&&pdfjs.PDFDataRangeTransport){
+  const transport=new pdfjs.PDFDataRangeTransport(length,initial);
+  transport.requestDataRange=(begin,end)=>{
+   if(closed)return;
+   const controller=new AbortController();controllers.add(controller);
+   (async()=>{
+    try{
+     const part=await request(url,{headers:{Range:'bytes='+begin+'-'+(end-1)},signal:controller.signal});
+     const range=part.headers?.get('Content-Range')||'';
+     if(part.status!==206||(range&&!range.startsWith('bytes '+begin+'-')))throw Error('Drive no devolvió el bloque solicitado del PDF.');
+     const bytes=new Uint8Array(await part.arrayBuffer());
+     if(bytes.byteLength!==end-begin)throw Error('La descarga del bloque del PDF quedó incompleta.');
+     if(!closed)transport.onDataRange(begin,bytes);
+    }catch(error){
+     if(!closed){lastError=error;await task?.destroy().catch(()=>{})}
+    }finally{controllers.delete(controller)}
+   })();
+  };
+  transport.abort=()=>{closed=true;for(const controller of controllers)controller.abort();controllers.clear()};
+  task=pdfjs.getDocument({range:transport,length,rangeChunkSize:RANGE_BYTES,disableAutoFetch:true,disableStream:true,isEvalSupported:false});
+ }else if(response.status===206&&initial.byteLength!==length){
+  // A provider without usable range metadata can still be processed normally.
+  const full=await request(url);
+  task=pdfjs.getDocument({data:new Uint8Array(await full.arrayBuffer()),isEvalSupported:false});
+ }else{
+  task=pdfjs.getDocument({data:initial,isEvalSupported:false});
+ }
+ try{
+  const pdf=await task.promise;
+  return {pdf,get error(){return lastError},async close(){closed=true;for(const controller of controllers)controller.abort();controllers.clear();await task.destroy()}};
+ }catch(error){await task.destroy().catch(()=>{});throw lastError||error}
 }
 async function renderPageCanvas(pdf,pageNumber){
  const page=await pdf.getPage(pageNumber),natural=page.getViewport({scale:1});
@@ -62,53 +104,88 @@ export async function findOcrPages(db,terms){
 }
 export async function indexScannedManuals({db,request,rootIds,report=()=>{},shouldStop=()=>false}){
  const pdfjs=window.pdfjsLib;if(!pdfjs)throw Error('No está disponible el visor PDF necesario para procesar manuales.');
- const tesseract=await loadTesseract();
- const worker=await tesseract.createWorker('eng+spa',1,{logger:event=>{if(event.status==='recognizing text'&&Number.isFinite(event.progress))reportTo(report,'Reconociendo texto de la página… '+Math.round(event.progress*100)+'%')}});
- let processed=0,skipped=0,errors=0,ocrPages=0;
+ pdfjs.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+ let worker=null,processed=0,skipped=0,errors=0,ocrPages=0,paused=false,pauseReason='',pauseMessage='',currentPage='';
+ const failures=[];
+ const pauseFor=error=>{
+  if(error?.message==='AUTH_NEEDED'||error?.code==='AUTH_NEEDED'){paused=true;pauseReason='auth';pauseMessage='La conexión con Drive venció.';return true}
+  if(['permission-denied','unauthenticated','resource-exhausted','unavailable'].includes(error?.code)||error?.status===429||error?.status>=500||error?.name==='TypeError'){
+   paused=true;pauseReason='connection';
+   pauseMessage=['permission-denied','unauthenticated'].includes(error?.code)?'No se pudo guardar el índice. Comprobá la sesión y el permiso de administrador.':'La conexión o el servicio se interrumpió. Intentá reanudar más tarde.';
+   return true;
+  }
+  return false;
+ };
  try{
   const files=await discoverPdfs(request,rootIds,shouldStop,report);reportTo(report,files.length+' PDF encontrados. Preparando el OCR…');
   for(let fileIndex=0;fileIndex<files.length;fileIndex++){
    if(shouldStop())break;
    const file=files[fileIndex];if(!safeId(file.id))continue;
    const stateRef=doc(db,OCR_FILES,file.id);
+   let opened=null,state=null;
    try{
     const stateSnapshot=await getDoc(stateRef),prior=stateSnapshot.exists()?stateSnapshot.data():{},modifiedTime=String(file.modifiedTime||'');
     if(['complete','no-text'].includes(prior.status)&&prior.modifiedTime===modifiedTime){skipped++;continue}
     reportTo(report,'Procesando '+(fileIndex+1)+' de '+files.length+': '+file.name);
-    await removeOldPages(db,file.id);
-    if(Number(file.size)>MAX_PDF_BYTES)throw Error('Supera el límite de 60 MB.');
-    const started=writeBatch(db);
-    started.set(stateRef,{fileId:file.id,fileName:String(file.name||'').slice(0,300),modifiedTime,status:'processing',pageCount:0,ocrPageCount:0,updatedAt:serverTimestamp()});
-    await started.commit();
-    const response=await request('https://www.googleapis.com/drive/v3/files/'+encodeURIComponent(file.id)+'?alt=media'),buffer=await response.arrayBuffer();
-    if(buffer.byteLength>MAX_PDF_BYTES)throw Error('Supera el límite de 60 MB.');
-    const pdf=await pdfjs.getDocument({data:buffer,isEvalSupported:false}).promise;
-    if(pdf.numPages>MAX_PDF_PAGES)throw Error('Supera el límite de '+MAX_PDF_PAGES+' páginas.');
-    let records=[],fileOcrPages=0;
-    for(let pageNumber=1;pageNumber<=pdf.numPages;pageNumber++){
+    opened=await openManualPdf({pdfjs,request,file});
+    const pdf=opened.pdf;
+    const resume=prior.indexVersion===INDEX_VERSION&&prior.modifiedTime===modifiedTime&&Number.isInteger(prior.lastPage)&&prior.lastPage>=0&&prior.lastPage<=pdf.numPages;
+    // Do not remove existing pages until Drive has actually opened the PDF.
+    if(!resume)await removeOldPages(db,file.id);
+    state={fileId:file.id,fileName:String(file.name||'').slice(0,300),modifiedTime,status:'processing',pageCount:pdf.numPages,ocrPageCount:resume?(Number(prior.ocrPageCount)||0):0,lastPage:resume?prior.lastPage:0,indexVersion:INDEX_VERSION};
+    let records=[],lastPage=state.lastPage,pendingOcr=0;
+    const checkpoint=async status=>{
+     const batch=writeBatch(db);
+     for(const record of records)batch.set(doc(db,OCR_PAGES,record.id),record.data);
+     const next={...state,status,lastPage,ocrPageCount:state.ocrPageCount+pendingOcr,updatedAt:serverTimestamp()};
+     batch.set(stateRef,next);await batch.commit();
+     state=next;ocrPages+=pendingOcr;pendingOcr=0;records=[];
+    };
+    await checkpoint('processing');
+    for(let pageNumber=state.lastPage+1;pageNumber<=pdf.numPages;pageNumber++){
      if(shouldStop())break;
-     const page=await pdf.getPage(pageNumber),content=await page.getTextContent(),pageText=content.items.map(item=>item.str||'').join(' ').replace(/\s+/g,' ').trim();
-     if(pageText.length>=40)continue;
-     const canvas=await renderPageCanvas(pdf,pageNumber);
+     currentPage=file.name+' · página '+pageNumber+' de '+pdf.numPages;
+     reportTo(report,currentPage);
+     const page=await pdf.getPage(pageNumber);
+     let canvas=null;
      try{
-      const result=await worker.recognize(canvas),text=String(result?.data?.text||'').replace(/\s+/g,' ').trim().slice(0,100000),tokens=tokensFor(text);
-      if(text&&tokens.length){
-       records.push({id:file.id+'_'+pageNumber,data:{fileId:file.id,fileName:String(file.name||'').slice(0,300),page:pageNumber,text,tokens,sourceModifiedTime:modifiedTime,updatedAt:serverTimestamp()}});
-       fileOcrPages++;ocrPages++;
-       if(records.length>=WRITE_CHUNK){await writePageRecords(db,records);records=[]}
+      const content=await page.getTextContent(),pageText=content.items.map(item=>item.str||'').join(' ').replace(/\s+/g,' ').trim();
+      if(pageText.length<40){
+       if(!worker){
+        const tesseract=await loadTesseract();
+        worker=await tesseract.createWorker('eng+spa',1,{logger:event=>{if(event.status==='recognizing text'&&Number.isFinite(event.progress))reportTo(report,currentPage+' · '+Math.round(event.progress*100)+'%')}});
+       }
+       canvas=await renderPageCanvas(pdf,pageNumber);
+       const result=await worker.recognize(canvas),text=String(result?.data?.text||'').replace(/\s+/g,' ').trim().slice(0,100000),tokens=tokensFor(text);
+       if(text&&tokens.length){
+        records.push({id:file.id+'_'+pageNumber,data:{fileId:file.id,fileName:state.fileName,page:pageNumber,text,tokens,sourceModifiedTime:modifiedTime,updatedAt:serverTimestamp()}});
+        pendingOcr++;
+       }
       }
-     }finally{canvas.width=0;canvas.height=0}
+      lastPage=pageNumber;
+      if(lastPage-state.lastPage>=CHECKPOINT_PAGES)await checkpoint('processing');
+     }finally{if(canvas){canvas.width=0;canvas.height=0}page.cleanup?.()}
     }
-    if(records.length)await writePageRecords(db,records);
-    const stopped=shouldStop(),finish=writeBatch(db);
-    finish.set(stateRef,{fileId:file.id,fileName:String(file.name||'').slice(0,300),modifiedTime,status:stopped?'processing':(fileOcrPages?'complete':'no-text'),pageCount:pdf.numPages,ocrPageCount:fileOcrPages,updatedAt:serverTimestamp()});
-    await finish.commit();processed++;pdf.destroy?.();if(stopped)break;
+    const stopped=shouldStop();
+    await checkpoint(stopped?'processing':(state.ocrPageCount+pendingOcr?'complete':'no-text'));
+    if(!stopped)processed++;
+    if(stopped)break;
    }catch(error){
-    errors++;const failed=writeBatch(db);
-    failed.set(stateRef,{fileId:file.id,fileName:String(file.name||'').slice(0,300),modifiedTime:String(file.modifiedTime||''),status:'error',error:String(error?.message||'Error desconocido').slice(0,300),updatedAt:serverTimestamp()});
-    await failed.commit().catch(()=>{});
+    error=opened?.error||error;
+    // Auth/network failures pause the run once; they are not failures of every PDF.
+    if(pauseFor(error))break;
+    errors++;
+    const message=String(error?.message||'Error desconocido').slice(0,300);
+    failures.push({fileName:String(file.name||''),error:message});
+    const failed=writeBatch(db);
+    failed.set(stateRef,{...(state||{}),fileId:file.id,fileName:String(file.name||'').slice(0,300),modifiedTime:String(file.modifiedTime||''),status:'error',error:message,updatedAt:serverTimestamp()});
+    try{await failed.commit()}catch(saveError){if(pauseFor(saveError))break;throw saveError}
+   }finally{
+    if(opened)await opened.close().catch(()=>{});
    }
   }
- }finally{await worker.terminate()}
- return {processed,skipped,errors,ocrPages,stopped:shouldStop()};
+ }catch(error){if(!pauseFor(error))throw error}
+ finally{if(worker)await worker.terminate()}
+ return {processed,skipped,errors,ocrPages,failures,paused,pauseReason,pauseMessage,stopped:shouldStop()};
 }
+
