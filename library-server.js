@@ -85,7 +85,7 @@ export async function libraryDriveResponse(request, input, options = {}) {
     const result = await request('exportarDocumentoPDF', [id]);
     return new Response(Uint8Array.from(atob(result.base64), c => c.charCodeAt(0)), {headers: {'Content-Type': 'application/pdf'}});
   }
-  if (url.searchParams.get('alt') !== 'media') return json(await request('metadatosArchivo', [id]));
+  if (url.searchParams.get('alt') !== 'media') return json(await request('metadatosArchivo', options.libraryPdfBootstrap ? [id, true] : [id]));
   // Reuse metadata already fetched for this open PDF. Each block RPC still
   // validates the current session, role and library membership on the server.
   const known = options.libraryFile;

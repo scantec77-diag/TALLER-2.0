@@ -3,7 +3,7 @@ const assert=require('node:assert/strict');
 const fs=require('node:fs');
 const vm=require('node:vm');
 function loadReader(){
-  const context={AbortController,DOMException,Uint8Array,Number,Promise,Error,encodeURIComponent};
+  const context={AbortController,DOMException,Uint8Array,Number,Promise,Error,encodeURIComponent,atob};
   vm.createContext(context);
   vm.runInContext(fs.readFileSync('progressive-pdf.js','utf8').replace(/^export /gm,''),context);
   return context.createProgressivePdf;
@@ -53,6 +53,22 @@ function viewerContext(){
   vm.runInContext(source.slice(source.indexOf('async function openDriveFile('),source.indexOf('function settings(){')),context);
   return {context,nodes,events,intersect:()=>observeCallback([{isIntersecting:true}]),isObserved:()=>observed};
 }
+test('opening a PDF uses the prepared header and tail with just one server round trip',async()=>{
+ const size=1024*1024,chunk=384*1024,tail=2*chunk,calls=[];let transport,finish;
+ const chunks=[{start:0,length:chunk,size,base64:Buffer.alloc(chunk,1).toString('base64')},{start:tail,length:size-tail,size,base64:Buffer.alloc(size-tail,2).toString('base64')}];
+ class Range {
+  constructor(length,initial){assert.equal(length,size);assert.equal(initial.length,chunk);assert.equal(initial[0],1);transport=this}
+  onDataRange(start,bytes){assert.equal(start,tail);assert.equal(bytes.length,size-tail);assert.equal(bytes[0],2);finish({numPages:60})}
+ }
+ const lib={PDFDataRangeTransport:Range,getDocument(){queueMicrotask(()=>transport.requestDataRange(tail,size));return {promise:new Promise(r=>finish=r),destroy:async()=>{}}}};
+ const reader=loadReader()({lib,file:{id:'manual00001'},request:async(url,options)=>{calls.push(url);assert.equal(options.libraryPdfBootstrap,true);return Response.json({size,initialChunks:chunks})}});
+ assert.equal((await reader.promise).numPages,60);assert.equal(calls.length,1);reader.destroy();
+});
+test('invalid prepared bytes cannot start the PDF reader',async()=>{
+ let starts=0;
+ const reader=loadReader()({lib:{getDocument(){starts++}},file:{id:'manual00001'},request:async()=>Response.json({size:10,initialChunks:[{start:0,length:10,size:10,base64:'AQ=='}]})});
+ await assert.rejects(reader.promise,/fragmento inicial inválido/);assert.equal(starts,0);
+});
 test('first page paints before pages two and three are requested; full text scanning waits for a click',async()=>{
   const {context,nodes,events,intersect,isObserved}=viewerContext();
   await context.openDriveFile({id:'manual00001',name:'Manual.pdf',mimeType:'application/pdf'},'engine');
@@ -75,3 +91,4 @@ test('leaving a manual disconnects automatic loading and prevents new page reque
   intersect();await new Promise(setImmediate);
   assert.equal(events.filter(x=>x.startsWith('get:')).length,3);
 });
+

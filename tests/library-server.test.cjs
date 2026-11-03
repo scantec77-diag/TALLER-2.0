@@ -66,6 +66,17 @@ test('server authorizes a reader by their own Google identity and Firestore role
  assert.throws(()=>backend('unapproved').validUser_('x'.repeat(150)),/no tiene permiso/);
  assert.throws(()=>backend('reader','password').validUser_('x'.repeat(150)),/con Google/);
 });
+test('server prepares bounded head and tail in parallel only after session and file authorization',()=>{
+ const ctx=backend(),size=1024*1024,chunk=384*1024;let checks=0,reads=0;
+ ctx.validSession_=()=>checks++;
+ ctx.allowedFile_=()=>({id:'manual00001',mimeType:'application/pdf',size});
+ ctx.ScriptApp={getOAuthToken:()=> 'private-server-token'};
+ ctx.Utilities.base64Encode=bytes=>Buffer.from(bytes).toString('base64');
+ ctx.UrlFetchApp={fetchAll:requests=>{reads++;assert.equal(checks,1);assert.equal(requests.length,2);assert.equal(requests[0].headers.Range,'bytes=0-393215');assert.equal(requests[1].headers.Range,'bytes=786432-1048575');return requests.map((_,i)=>({getResponseCode:()=>206,getContent:()=>Buffer.alloc(i?size-2*chunk:chunk)}))}};
+ const result=ctx.metadatosArchivo('session','manual00001',true);assert.equal(reads,1);assert.equal(result.initialChunks.length,2);
+ ctx.validSession_=()=>{throw Error('bloqueado')};assert.throws(()=>ctx.metadatosArchivo('session','manual00001',true),/bloqueado/);assert.equal(reads,1);
+ ctx.validSession_=()=>true;ctx.allowedFile_=()=>{throw Error('fuera de biblioteca')};assert.throws(()=>ctx.metadatosArchivo('session','manual00001',true),/fuera de biblioteca/);assert.equal(reads,1);
+});
 test('Drive search cannot expose files outside the library root',()=>{
  const ctx=backend();ctx.validSession_=()=>true;
  ctx.driveApi_=()=>({getResponseCode:()=>200,getContentText:()=>JSON.stringify({files:[{id:'inside00001',name:'allowed.pdf',parents:['11cVCcyrGyjp17oqkjZ5uS93PqstprZ9Y']},{id:'outside0001',name:'private.pdf',parents:['elsewhere00']}]})});

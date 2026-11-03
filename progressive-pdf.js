@@ -16,20 +16,37 @@ export function createProgressivePdf({lib, file, request, onProgress = () => {},
     if (task) Promise.resolve(task.destroy()).catch(() => {});
   }
   const loading = (async () => {
-    const meta = await (await request(base, {signal: controller.signal})).json();
+    const meta = await (await request(base, {signal: controller.signal, libraryPdfBootstrap: true})).json();
     if (stopped) throw abortError();
     const size = Number(meta.size);
     if (!Number.isSafeInteger(size) || size <= 0) throw Error('El PDF no tiene un tamaño válido.');
     // Match the library service's maximum block size, avoiding tiny RPC calls.
     const rangeChunkSize = 384 * 1024;
-    const transport = new lib.PDFDataRangeTransport(size, new Uint8Array(0), true);
+    // The server prepares the header and PDF index together, with one access
+    // check and parallel Drive reads, instead of serial Apps Script round trips.
+    const initial = (meta.initialChunks || []).map(chunk => {
+      const bytes = Uint8Array.from(atob(chunk.base64), c => c.charCodeAt(0));
+      if (!Number.isSafeInteger(chunk.start) || chunk.start < 0 || chunk.length !== bytes.length
+        || bytes.length > rangeChunkSize || chunk.start + bytes.length > size || Number(chunk.size) !== size)
+        throw Error('Llegó un fragmento inicial inválido del PDF.');
+      return {start: chunk.start, bytes};
+    });
+    const first = initial.find(chunk => chunk.start === 0);
+    received = initial.reduce((total, chunk) => total + chunk.bytes.length, 0);
+    if (received) onProgress({received, size});
+    const transport = new lib.PDFDataRangeTransport(size, first?.bytes || new Uint8Array(0), true);
     transport.abort = () => { controller.abort(); };
     transport.requestDataRange = (begin, end) => {
       (async () => {
         if (stopped) return;
+        const prepared = initial.find(chunk => chunk.start <= begin && chunk.start + chunk.bytes.length >= end);
+        if (prepared) {
+          transport.onDataRange(begin, prepared.bytes.subarray(begin - prepared.start, end - prepared.start));
+          return;
+        }
         const response = await request(base + '?alt=media', {
           headers: {Range: 'bytes=' + begin + '-' + (end - 1)}, signal: controller.signal,
-          libraryFile: {...meta, id: file.id}
+          libraryFile: {id: file.id, size, mimeType: meta.mimeType}
         });
         if (stopped) return;
         const contentRange = response.headers.get('Content-Range');

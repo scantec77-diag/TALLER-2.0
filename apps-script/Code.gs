@@ -182,7 +182,31 @@ function exportarDocumentoPDF(session,fileId){
 }
 
 // Todas las operaciones de lectura verifican sesión y pertenencia a la biblioteca.
-function metadatosArchivo(session,fileId){validSession_(session);return allowedFile_(fileId,false)}
+function metadatosArchivo(session,fileId,preparePdf){
+  validSession_(session);
+  const file=allowedFile_(fileId,false);
+  if(preparePdf===true&&file.mimeType==='application/pdf')file.initialChunks=primerosBloquesPDF_(file);
+  return file;
+}
+function primerosBloquesPDF_(file){
+  const size=Number(file.size);
+  if(!Number.isSafeInteger(size)||size<=0)throw Error('El PDF no tiene un tamaño válido.');
+  const tail=Math.floor((size-1)/MAX_CHUNK_)*MAX_CHUNK_;
+  const starts=tail>0?[0,tail]:[0];
+  const token=ScriptApp.getOAuthToken();
+  const responses=UrlFetchApp.fetchAll(starts.map(start=>({
+    url:'https://www.googleapis.com/drive/v3/files/'+encodeURIComponent(file.id)+'?alt=media&supportsAllDrives=true',
+    method:'get',muteHttpExceptions:true,
+    headers:{Authorization:'Bearer '+token,Range:'bytes='+start+'-'+Math.min(size-1,start+MAX_CHUNK_-1)}
+  })));
+  return responses.map((response,i)=>{
+    const start=starts[i],length=Math.min(MAX_CHUNK_,size-start),status=response.getResponseCode();
+    if(status!==206&&!(status===200&&start===0&&size<=MAX_CHUNK_))throw Error('Drive no permitió preparar el PDF ('+status+').');
+    const bytes=response.getContent();
+    if(bytes.length!==length)throw Error('Llegó un fragmento incompleto del PDF.');
+    return {start,length,size,base64:Utilities.base64Encode(bytes)};
+  });
+}
 function consultarArchivos(session,params){
   validSession_(session);params=params||{};
   const q=String(params.q||'trashed = false');
@@ -218,3 +242,4 @@ function exportarDocumentoTexto(session,fileId){
   const text=response.getContentText();if(text.length>7*1024*1024)throw Error('El texto supera el tamaño admitido.');
   return text;
 }
+
