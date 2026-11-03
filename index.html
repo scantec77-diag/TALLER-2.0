@@ -332,7 +332,7 @@ async function accessDashboard(){
     const totalEntries=users.reduce((n,u)=>n+(Number(u.accessCount)||0),0);
     const totalFolders=users.reduce((n,u)=>n+u.items.filter(x=>x.kind==='folder').reduce((s,x)=>s+(Number(x.visitCount)||0),0),0);
     const totalFiles=users.reduce((n,u)=>n+u.items.filter(x=>x.kind==='file').reduce((s,x)=>s+(Number(x.visitCount)||0),0),0);
-    const cards=users.map(u=>{
+    const renderCards=list=>list.map(u=>{
       const folders=u.items.filter(x=>x.kind==='folder').sort((a,b)=>(b.lastVisited?.toMillis?.()||0)-(a.lastVisited?.toMillis?.()||0));
       const files=u.items.filter(x=>x.kind==='file').sort((a,b)=>(b.lastVisited?.toMillis?.()||0)-(a.lastVisited?.toMillis?.()||0));
       const formatItems=(items,emoji)=>items.map(x=>
@@ -346,7 +346,7 @@ async function accessDashboard(){
       const actions=protectedAccount?'<small>Cuenta administradora protegida</small>':
         '<div><button type="button" class="settings" data-user-action="'+(accessDenied(u)?'unblock':'block')+'" data-user="'+esc(u.uid)+'">'+(accessDenied(u)?'🔓 Desbloquear':'🔒 Bloquear')+'</button>'+
         (u.status==='deleted'?'':'<button type="button" class="settings" data-user-action="delete" data-user="'+esc(u.uid)+'">🗑 Eliminar</button>')+'</div>';
-      return '<section class="access-person"'+(u.status==='deleted'?' data-deleted="true" hidden':'')+'><strong>'+esc(u.displayName||'Nombre no disponible')+'</strong>'+
+      return '<section class="access-person"><strong>'+esc(u.displayName||'Nombre no disponible')+'</strong>'+
         '<small>'+esc(u.email||'')+'</small><small>Estado: '+state+'</small>'+actions+
         '<small>🔁 Ingresos: '+(Number(u.accessCount)||0)+' · 🕒 Último: '+esc(dateOf(u.lastAccess))+'</small>'+
         (u.readError?'<small role="alert">No se pudo leer la actividad de biblioteca ('+esc(u.readError)+'). Revisá las reglas de Firebase.</small>':
@@ -354,17 +354,22 @@ async function accessDashboard(){
         '<h3>Carpetas abiertas</h3>'+formatItems(folders,'📁')+
         '<h3>Documentos seleccionados</h3>'+formatItems(files,'📄')+'</details>')+
         '</section>';
-    }).join('')||'<p>No hay ingresos registrados todavía. No se pueden recuperar visitas anteriores a la activación del registro.</p>';
+    }).join('');
+    const activeUsers=users.filter(u=>!accessDenied(u));
+    const inactiveUsers=users.filter(u=>accessDenied(u));
+    const cards='<section aria-labelledby="activeUsersHeading"><h3 id="activeUsersHeading">Usuarios activos ('+activeUsers.length+')</h3>'+
+      (renderCards(activeUsers)||'<p>No hay usuarios activos registrados.</p>')+'</section>'+
+      '<section aria-labelledby="inactiveUsersHeading"><h3 id="inactiveUsersHeading">Usuarios bloqueados o eliminados ('+inactiveUsers.length+')</h3>'+
+      (renderCards(inactiveUsers)||'<p>No hay usuarios bloqueados ni eliminados.</p>')+'</section>';
     view.innerHTML='<button class="back" onclick="home()">← Volver</button><h2>👥 Accesos</h2>'+
       '<p>Actividad desde que se activó el registro. Se cuentan aperturas dentro de Taller 2.0; no permite conocer si alguien leyó por completo un documento ni las visitas directas a Google Drive.</p>'+
       '<div class="access-sum"><span><strong>'+users.length+'</strong>Usuarios</span>'+
       '<span><strong>'+totalEntries+'</strong>Ingresos</span><span><strong>'+totalFolders+'</strong>Carpetas</span>'+
       '<span><strong>'+totalFiles+'</strong>Documentos</span></div>'+
       '<button class="settings" onclick="accessDashboard()">⟳ Actualizar</button>'+
-      '<label><input type="checkbox" id="showDeletedUsers" style="width:auto"> Mostrar accesos eliminados</label>'+
+
       '<p id="accessActionStatus" role="status"></p>'+cards;
     view.querySelectorAll('[data-user-action]').forEach(button=>button.onclick=()=>changeUserAccess(button.dataset.user,button.dataset.userAction));
-    document.getElementById('showDeletedUsers').onchange=event=>view.querySelectorAll('[data-deleted]').forEach(card=>card.hidden=!event.target.checked);
   }catch(e){
     const el=document.getElementById('accessStatus');
     if(el)el.textContent='No se pudo leer el registro ('+(e.code||'error')+'). Para ver usuarios necesitás rol de administrador y reglas publicadas en Firebase.';
