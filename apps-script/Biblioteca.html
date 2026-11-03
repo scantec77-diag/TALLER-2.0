@@ -178,5 +178,18 @@ async function openFile(file){
   }catch(e){if(version===operation)status('No se pudo abrir el archivo: '+errorString(e)+'. Volvé a la biblioteca para elegir otro documento.')}
 }
 $('search').addEventListener('input',paintFiles);
-browse();
+
+const bridgeMode=<?!= bridgeJson ?>,bridgeNonce=<?!= bridgeNonceJson ?>;
+if(bridgeMode){
+  const origin='https://scantec77-diag.github.io',channel='taller-library-v1';
+  const methods=new Set(['listarCarpeta','infoArchivo','metadatosArchivo','consultarArchivos','bloqueArchivo','exportarDocumentoPDF','exportarDocumentoTexto']);
+  window.addEventListener('message',async event=>{
+    const message=event.data;
+    if(event.source!==window.top||event.origin!==origin||message?.channel!==channel||message.nonce!==bridgeNonce||message.type!=='request')return;
+    if(!methods.has(message.method)||!Array.isArray(message.args))return;
+    try{const result=await gs(message.method,librarySession,...message.args);window.top.postMessage({channel,nonce:bridgeNonce,type:'result',id:message.id,result},origin)}
+    catch(error){window.top.postMessage({channel,nonce:bridgeNonce,type:'result',id:message.id,error:errorString(error)},origin)}
+  });
+  window.top.postMessage({channel,nonce:bridgeNonce,type:'ready'},origin);
+}else browse();
 </script></body></html>

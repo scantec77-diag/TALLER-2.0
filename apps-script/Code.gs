@@ -24,10 +24,17 @@ function doPost(e){
     CacheService.getScriptCache().put('library_'+session,user.uid,21600);
     const t=HtmlService.createTemplateFromFile('Biblioteca');
     t.sessionJson=JSON.stringify(session);
+    t.bridgeJson=JSON.stringify(params.mode==='bridge');
+    t.bridgeNonceJson=JSON.stringify(/^[0-9a-f-]{36}$/.test(String(params.bridgeNonce||''))?params.bridgeNonce:'');
     t.folderJson=JSON.stringify(folder);
     t.folderNameJson=JSON.stringify(info.name||'Biblioteca').replace(/</g,'\\u003c');
-    return t.evaluate().setTitle('Taller 2.0 · Biblioteca');
+    const output=t.evaluate().setTitle('Taller 2.0 · Biblioteca');
+    return params.mode==='bridge'?output.setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL):output;
   }catch(err){
+    if(e?.parameter?.mode==='bridge'&&/^[0-9a-f-]{36}$/.test(String(e.parameter.bridgeNonce||''))){
+      const message={channel:'taller-library-v1',nonce:e.parameter.bridgeNonce,type:'ready',error:'Tu cuenta de Taller no tiene acceso a la biblioteca o la sesión venció. Volvé a ingresar con tu cuenta personal.'};
+      return HtmlService.createHtmlOutput('<script>window.top.postMessage('+JSON.stringify(message).replace(/</g,'\\u003c')+',"https://scantec77-diag.github.io")</script>').setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+    }
     return HtmlService.createHtmlOutput('<h3>Acceso a la biblioteca no autorizado</h3>'+
       '<p>Volvé a Taller 2.0 para iniciar sesión o pedir permiso de acceso.</p>'+
       '<p><a href="https://scantec77-diag.github.io/TALLER-2.0/">Volver a Taller 2.0</a></p>')
@@ -79,7 +86,7 @@ function driveApi_(relative,opt){
 }
 function meta_(id){
   if(typeof id!=='string'||!/^[A-Za-z0-9_-]{8,120}$/.test(id))throw Error('Identificador inválido.');
-  const res=driveApi_('files/'+encodeURIComponent(id)+'?fields=id,name,mimeType,size,parents,trashed,webViewLink&supportsAllDrives=true');
+  const res=driveApi_('files/'+encodeURIComponent(id)+'?fields=id,name,mimeType,size,modifiedTime,parents,trashed,webViewLink&supportsAllDrives=true');
   if(res.getResponseCode()!==200)throw Error('Archivo o carpeta no disponible.');
   const m=JSON.parse(res.getContentText());
   if(m.trashed)throw Error('El archivo está en la papelera.');
@@ -159,3 +166,42 @@ function exportarDocumentoPDF(session,fileId){
   if(data.length>7*1024*1024)throw Error('El documento supera el tamaño admitido para conversión directa.');
   return {name:file.name+'.pdf',mimeType:'application/pdf',size:data.length,base64:Utilities.base64Encode(data)};
 }
+
+// Todas las operaciones de lectura verifican sesión y pertenencia a la biblioteca.
+function metadatosArchivo(session,fileId){validSession_(session);return allowedFile_(fileId,false)}
+function consultarArchivos(session,params){
+  validSession_(session);params=params||{};
+  const q=String(params.q||'trashed = false');
+  if(q.length>4096)throw Error('La consulta es demasiado larga.');
+  const query={q:q,fields:'nextPageToken,files(id,name,mimeType,size,modifiedTime,parents,webViewLink)',pageSize:Math.max(1,Math.min(1000,Number(params.pageSize)||1000)),supportsAllDrives:true,includeItemsFromAllDrives:true};
+  if(params.pageToken)query.pageToken=String(params.pageToken);
+  if(params.orderBy)query.orderBy=String(params.orderBy).slice(0,80);
+  const encoded=Object.keys(query).map(k=>encodeURIComponent(k)+'='+encodeURIComponent(query[k])).join('&');
+  const response=driveApi_('files?'+encoded);
+  if(response.getResponseCode()!==200)throw Error('No se pudo consultar la biblioteca ('+response.getResponseCode()+').');
+  const data=JSON.parse(response.getContentText()),parents={};
+  const files=(data.files||[]).filter(file=>{
+    let current=file;const seen={};
+    for(let i=0;i<40;i++){
+      if(current.id===LIBRARY_ROOT_)return true;
+      const parent=(current.parents||[])[0];if(!parent||seen[parent])return false;seen[parent]=true;
+      try{current=parents[parent]||(parents[parent]=meta_(parent))}catch(_){return false}
+    }
+    return false;
+  });
+  return {files:files,nextPageToken:data.nextPageToken||''};
+}
+function verificarBibliotecaServidor_(){
+  allowedFile_(LIBRARY_ROOT_,true);
+  if(!doPost({parameter:{}}).getContent().includes('Acceso a la biblioteca no autorizado'))throw Error('La protección de acceso no funciona.');
+  console.log('Biblioteca accesible; solicitudes sin sesión rechazadas.');
+}
+function exportarDocumentoTexto(session,fileId){
+  validSession_(session);const file=allowedFile_(fileId,false);
+  if(file.mimeType!=='application/vnd.google-apps.document')throw Error('Este archivo no se puede exportar como texto.');
+  const response=driveApi_('files/'+encodeURIComponent(fileId)+'/export?mimeType=text%2Fplain');
+  if(response.getResponseCode()!==200)throw Error('No se pudo leer el texto del documento.');
+  const text=response.getContentText();if(text.length>7*1024*1024)throw Error('El texto supera el tamaño admitido.');
+  return text;
+}
+

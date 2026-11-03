@@ -1,32 +1,19 @@
-# Activación de biblioteca sin segundo inicio de sesión — Taller 2.0
+# Acceso a manuales con la cuenta personal de Taller
 
-**Estado:** Código preparado en GitHub, **no desplegado** en Google Apps Script desde este repositorio. La APK existente es una WebView de `https://scantec77-diag.github.io/TALLER-2.0/`, por lo que no requiere una compilación distinta para cargar cambios publicados del sitio.
+El servicio se publicó en Google Apps Script, versión 4, el 3 de noviembre de 2026. Se ejecuta como la cuenta propietaria de los manuales. Google mantiene su autorización en el servidor; la contraseña y el token de Drive no se entregan a los usuarios.
 
-## Archivos de Apps Script
+Cada visitante inicia sesión en Taller con su propia cuenta de Google. El servicio valida su Firebase ID token, la verificación de Google y el rol `admin` o `reader` de Firestore. Una cuenta sin permiso no recibe archivos. Esto también se aplica al primer acceso, a la búsqueda dentro de documentos y a Reconectar.
 
-- `Code.gs`
-- `Biblioteca.html`
-- `appsscript.json`
+La interfaz conserva el visor de Taller. `library-server.js` abre un canal temporal con Apps Script; el canal valida origen, identificador aleatorio y remitente de cada respuesta. El servidor admite únicamente lectura y comprueba que los archivos pertenecen a la biblioteca configurada. La sesión del canal dura hasta seis horas y se renueva con la sesión personal de Taller, sin el ingreso de la cuenta compartida.
 
-El Web App se publica **como el propietario de la cuenta que tiene acceso a la carpeta de los manuales** y con acceso de red «Cualquier persona». Aunque el sitio pueda recibir peticiones externas, **el servidor valida el Firebase ID token y el rol `admin` o `reader` en Firestore** antes de crear una sesión, y comprueba que cada archivo pertenece a la carpeta raíz prevista. No se envían contraseñas ni permisos de Google Drive al usuario.
+## Actualizar el servicio
 
-## Cómo publicar (requiere acceso autenticado a Apps Script)
+1. Abrir el proyecto original de Apps Script desde la cuenta de manuales.
+2. Copiar `Code.gs`, `Biblioteca.html` y `appsscript.json`. El archivo HTML debe llamarse `Biblioteca`.
+3. Administrar las implementaciones y publicar una nueva versión conservando la cuenta ejecutora y el acceso existente. No cambiar los roles de usuarios como parte de una actualización.
+4. Si cambia el enlace de implementación, actualizar `LIBRARY_SERVICE_URL` en `index.html`.
+5. Ejecutar `node --test tests/*.test.cjs` antes de publicar el sitio.
+6. Comprobar un usuario lector autorizado: entrar con su Google personal, abrir una carpeta y un PDF, buscar dentro de manuales y tocar Reconectar. Ninguna de estas acciones debe pedir la cuenta de manuales.
+7. Comprobar el rechazo de una sesión inválida y de una cuenta sin permiso.
 
-1. Abrir el proyecto original de Apps Script con la cuenta autorizada para consultar la biblioteca.
-2. Reemplazar el contenido de `Code.gs` y crear o reemplazar el archivo HTML `Biblioteca` con `Biblioteca.html`.
-3. Activar «Mostrar archivo de manifiesto» en la configuración y actualizar `appsscript.json`.
-4. Implementar > Administrar implementaciones > Editar > Nueva versión. Seleccionar «Aplicación web», «Ejecutar como: Yo», «Quién tiene acceso: Cualquier persona», y aprobar permisos de Drive de solo lectura.
-5. Confirmar el enlace `/exec`; si es nuevo, actualizar `LIBRARY_SERVICE_URL` en `index.html`.
-6. Revisar las reglas y documentos `roles/{uid}` de Firestore para permitir `admin` o `reader` a los usuarios de confianza. **No conceder acceso a cualquiera que conozca el enlace público del sitio.**
-7. Entrar a Taller 2.0 con cuenta administradora. Ir a Gestionar conexión > «Probar acceso sin segunda contraseña» y abrir una máquina. Verificar carpetas, PDF y otro usuario aprobado.
-8. Solo después de comprobar el despliegue, cambiar `DIRECT_LIB_DEFAULT` de `false` a `true` en `index.html` para toda la APK. El modo de prueba es local al navegador para no dejar sin servicio a otros usuarios durante la transición.
-
-## Limitaciones y pruebas
-
-- Los PDF almacenados se descargan por partes y se muestran en un visor de páginas; grandes manuales pueden tardar según su tamaño y la conexión.
-- Docs, Sheets y Slides nativos se convierten a PDF con un límite de tamaño. Los demás formatos pueden descargarse desde el visor.
-- La sesión temporal del visor dura hasta seis horas y después debe reabrirse la biblioteca desde Taller 2.0, **sin contraseña de la cuenta de manuales**.
-- Probar con un usuario no autorizado: debe rechazarse antes de listar cualquier carpeta.
-- Al salir del visor se vuelve a la web de Taller 2.0. La sesión personal de Firebase suele persistir en ese navegador.
-
-**No guardar la contraseña de los manuales en el APK, en GitHub, ni en Apps Script.**
+La APK es una WebView del sitio publicado y carga estas actualizaciones sin recompilarse. No guardar contraseñas de los manuales en el APK, en GitHub ni en Apps Script.
