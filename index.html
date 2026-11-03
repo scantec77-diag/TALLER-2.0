@@ -69,7 +69,7 @@
 .account-panel button{width:100%;text-align:left;background:#294563;border:0;border-radius:8px;color:#fff;padding:12px;cursor:pointer}
 header{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}
 header .header-brand{min-width:0}
-</style><link rel="stylesheet" href="./taller-ia.css"><script defer src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script><link rel="icon" type="image/jpeg" href="./assets/taller-logo.jpg?v=20261022"><link rel="apple-touch-icon" href="./assets/taller-logo.jpg"></head><body><header><div class="header-brand"><h1 class="app-brand"><img class="app-logo" src="./assets/taller-logo.jpg?v=20261022" width="88" height="66" alt="Logo de Taller 2.0"> <span>Taller 2.0</span></h1><p>Biblioteca de máquinas y documentación técnica </p></div><details id="accountMenu" class="account-menu" hidden><summary aria-label="Mi cuenta" title="Mi cuenta">👤</summary><div class="account-panel"><strong>Mi cuenta</strong><small id="accountEmail"></small><button id="accountLogout" type="button">↪ Cerrar sesión</button></div></details></header><main><div id="view"></div></main>
+.access-inactive-group{border-top:3px solid #e0a74b;margin-top:28px;padding-top:16px}.access-inactive-group>h3{color:#ffd28a}.access-person.access-blocked,.access-person.access-deleted{padding:14px;margin:12px 0;border:1px solid;border-left-width:5px;border-radius:9px}.access-person.access-blocked{background:#352a15;border-color:#e0a74b}.access-person.access-deleted{background:#381f2b;border-color:#e68ca8}</style><link rel="stylesheet" href="./taller-ia.css"><script defer src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script><link rel="icon" type="image/jpeg" href="./assets/taller-logo.jpg?v=20261022"><link rel="apple-touch-icon" href="./assets/taller-logo.jpg"></head><body><header><div class="header-brand"><h1 class="app-brand"><img class="app-logo" src="./assets/taller-logo.jpg?v=20261022" width="88" height="66" alt="Logo de Taller 2.0"> <span>Taller 2.0</span></h1><p>Biblioteca de máquinas y documentación técnica </p></div><details id="accountMenu" class="account-menu" hidden><summary aria-label="Mi cuenta" title="Mi cuenta">👤</summary><div class="account-panel"><strong>Mi cuenta</strong><small id="accountEmail"></small><button id="accountLogout" type="button">↪ Cerrar sesión</button></div></details></header><main><div id="view"></div></main>
 <script type="module">
 import { openTallerIA } from './taller-ia.js';
 import { createLibraryServer } from './library-server.js?v=20261103f';
@@ -346,7 +346,7 @@ async function accessDashboard(){
       const actions=protectedAccount?'<small>Cuenta administradora protegida</small>':
         '<div><button type="button" class="settings" data-user-action="'+(accessDenied(u)?'unblock':'block')+'" data-user="'+esc(u.uid)+'">'+(accessDenied(u)?'🔓 Desbloquear':'🔒 Bloquear')+'</button>'+
         (u.status==='deleted'?'':'<button type="button" class="settings" data-user-action="delete" data-user="'+esc(u.uid)+'">🗑 Eliminar</button>')+'</div>';
-      return '<section class="access-person"><strong>'+esc(u.displayName||'Nombre no disponible')+'</strong>'+
+      return '<section class="access-person'+(u.status==='deleted'?' access-deleted':u.status==='blocked'?' access-blocked':'')+'"><strong>'+esc(u.displayName||'Nombre no disponible')+'</strong>'+
         '<small>'+esc(u.email||'')+'</small><small>Estado: '+state+'</small>'+actions+
         '<small>🔁 Ingresos: '+(Number(u.accessCount)||0)+' · 🕒 Último: '+esc(dateOf(u.lastAccess))+'</small>'+
         (u.readError?'<small role="alert">No se pudo leer la actividad de biblioteca ('+esc(u.readError)+'). Revisá las reglas de Firebase.</small>':
@@ -359,7 +359,7 @@ async function accessDashboard(){
     const inactiveUsers=users.filter(u=>accessDenied(u));
     const cards='<section aria-labelledby="activeUsersHeading"><h3 id="activeUsersHeading">Usuarios activos ('+activeUsers.length+')</h3>'+
       (renderCards(activeUsers)||'<p>No hay usuarios activos registrados.</p>')+'</section>'+
-      '<section aria-labelledby="inactiveUsersHeading"><h3 id="inactiveUsersHeading">Usuarios bloqueados o eliminados ('+inactiveUsers.length+')</h3>'+
+      '<section class="access-inactive-group" aria-labelledby="inactiveUsersHeading"><h3 id="inactiveUsersHeading">Usuarios bloqueados o eliminados ('+inactiveUsers.length+')</h3>'+
       (renderCards(inactiveUsers)||'<p>No hay usuarios bloqueados ni eliminados.</p>')+'</section>';
     view.innerHTML='<button class="back" onclick="home()">← Volver</button><h2>👥 Accesos</h2>'+
       '<p>Actividad desde que se activó el registro. Se cuentan aperturas dentro de Taller 2.0; no permite conocer si alguien leyó por completo un documento ni las visitas directas a Google Drive.</p>'+
