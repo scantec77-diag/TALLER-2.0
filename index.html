@@ -987,11 +987,12 @@ async function openDriveFile(file,searchText='',ocrMatches=[]){
   const driveLink=driveFileLink(file);
   if(file.mimeType!=='application/pdf'&&!/\.pdf$/i.test(file.name)){
     const isDocx=file.mimeType==='application/vnd.openxmlformats-officedocument.wordprocessingml.document'||/\.docx$/i.test(file.name);
+    const isLegacyDoc=file.mimeType==='application/msword'||/\.doc$/i.test(file.name);
     const isGoogleDoc=file.mimeType==='application/vnd.google-apps.document';
     const wordStatusId='wordStatus';
     view.innerHTML=folderHeader()+'<h2>'+esc(file.name)+'</h2>'+
       '<p id="'+wordStatusId+'" role="status">'+(searchText?'Drive encontró este documento. Leyendo el texto…':'Este documento se abre en su aplicación compatible.')+'</p>'+
-      (useServerLibrary()?'<button class="settings" id="documentDownload" type="button">Descargar documento</button>':'<p><a target="_blank" rel="noopener" href="'+driveLink+'">Abrir documento en Google Drive ↗</a></p>');
+      (useServerLibrary()?'<button class="settings" id="documentDownload" type="button">⬇ Descargar documento</button>'+(isDocx||isLegacyDoc?'<button class="settings" id="documentOpenApp" type="button">📖 Abrir con aplicación</button>':'')+(isDocx?'<button class="settings" id="documentPreview" type="button">👁 Leer DOCX aquí</button>':''):'<p><a target="_blank" rel="noopener" href="'+driveLink+'">Abrir documento en Google Drive ↗</a></p>');
     bindTrailButtons();
     const downloadButton=document.getElementById('documentDownload');
     if(downloadButton)downloadButton.onclick=async()=>{
@@ -1005,6 +1006,50 @@ async function openDriveFile(file,searchText='',ocrMatches=[]){
         if(status?.isConnected)status.textContent='Documento listo para descargar.';
       }catch(error){if(status?.isConnected)status.textContent='No se pudo descargar: '+error.message}
       finally{if(downloadButton.isConnected)downloadButton.disabled=false}
+    };
+    const openAppButton=document.getElementById('documentOpenApp');
+    if(openAppButton)openAppButton.onclick=async()=>{
+      openAppButton.disabled=true;
+      const status=document.getElementById(wordStatusId);
+      try{
+        const response=await driveRequest('https://www.googleapis.com/drive/v3/files/'+encodeURIComponent(file.id)+'?alt=media');
+        const blob=await response.blob();
+        if(version!==driveListVersion||!openAppButton.isConnected)return;
+        const type=isDocx?'application/vnd.openxmlformats-officedocument.wordprocessingml.document':'application/msword';
+        const shareFile=new File([blob],file.name,{type});
+        if(navigator.canShare?.({files:[shareFile]})&&navigator.share){
+          await navigator.share({files:[shareFile],title:file.name});
+          if(status?.isConnected)status.textContent='Elegí una aplicación compatible para abrir el documento.';
+        }else{
+          const url=URL.createObjectURL(blob);
+          const link=document.createElement('a');link.href=url;link.download=file.name;link.click();
+          setTimeout(()=>URL.revokeObjectURL(url),60000);
+          if(status?.isConnected)status.textContent='El navegador descargó el documento. Abrilo con Word, Google Docs u otra aplicación compatible.';
+        }
+      }catch(error){if(error.name!=='AbortError'&&status?.isConnected)status.textContent='No se pudo abrir el documento: '+error.message}
+      finally{if(openAppButton.isConnected)openAppButton.disabled=false}
+    };
+    const previewButton=document.getElementById('documentPreview');
+    if(previewButton)previewButton.onclick=async()=>{
+      previewButton.disabled=true;
+      const status=document.getElementById(wordStatusId);
+      if(status?.isConnected)status.textContent='Leyendo DOCX…';
+      try{
+        if(Number(file.size)>25000000)throw Error('El documento supera el límite de lectura de 25 MB.');
+        const response=await driveRequest('https://www.googleapis.com/drive/v3/files/'+encodeURIComponent(file.id)+'?alt=media');
+        const buffer=await response.arrayBuffer();
+        const mammoth=await loadMammoth();
+        const raw=(await mammoth.extractRawText({arrayBuffer:buffer})).value||'';
+        if(version!==driveListVersion||!previewButton.isConnected)return;
+        document.getElementById('documentTextPreview')?.remove();
+        const article=document.createElement('article');
+        article.id='documentTextPreview';
+        article.style.cssText='white-space:pre-wrap;overflow-wrap:anywhere;max-height:75vh;overflow:auto;text-align:left;padding:16px;border:1px solid #405c7a;border-radius:10px;margin-top:12px';
+        article.textContent=raw||'El documento no contiene texto extraíble.';
+        status.after(article);
+        status.textContent='Vista de texto del DOCX (puede no conservar tablas, imágenes ni formato).';
+      }catch(error){if(status?.isConnected)status.textContent='No se pudo leer el DOCX: '+error.message}
+      finally{if(previewButton.isConnected)previewButton.disabled=false}
     };
     if(searchText&&(isDocx||isGoogleDoc)){
       const status=document.getElementById(wordStatusId);
