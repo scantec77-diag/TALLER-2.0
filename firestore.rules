@@ -194,7 +194,7 @@ service cloud.firestore {
       allow list: if accessAdmin();
       function validManagement() {
         return accessAdmin() && request.auth.uid != uid
-          && request.resource.data.role == 'reader'
+          && request.resource.data.role in ['reader','editor']
           && request.resource.data.status in ['active','blocked','deleted']
           && request.resource.data.updatedAt == request.time
           && request.resource.data.updatedBy == request.auth.uid;
