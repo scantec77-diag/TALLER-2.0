@@ -38,10 +38,11 @@ jobs:
         shell: bash
         run: |
           mkdir -p _site/assets
-          cp index.html firebase-config.js firebase-messaging-sw.js push-config.js push-notifications.js manual-content-search.js manual-ocr.js library-server.js taller-ia.js taller-ia.css _site/
+          cp index.html firebase-config.js firebase-messaging-sw.js push-config.js push-notifications.js manual-content-search.js manual-ocr.js library-server.js progressive-pdf.js taller-ia.js taller-ia.css _site/
           cp -R assets/. _site/assets/
           touch _site/.nojekyll
           test -f _site/index.html
+          test -f _site/progressive-pdf.js
           test -f _site/taller-ia.js
           test -f _site/taller-ia.css
           grep -q 'card-sisu' _site/index.html
@@ -54,5 +55,3 @@ jobs:
       - name: Publicar sitio
         id: deployment
         uses: actions/deploy-pages@v4
-
-
