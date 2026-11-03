@@ -1004,24 +1004,45 @@ async function openDriveFile(file,searchText='',ocrMatches=[]){
     for(const match of ocrMatches||[]){const existing=allMatches.get(match.page);if(existing){existing.score=Math.max(existing.score||0,match.score||0);if(!existing.text)existing.text=match.text||'';}else if(match.page>=1&&match.page<=pdf.numPages)allMatches.set(match.page,match);}
     const pageMatches=[...allMatches.values()].sort((a,b)=>(b.score||0)-(a.score||0)||a.page-b.page);
     let page=pageMatches[0]?.page||1,seq=0,rendering=false;
-    status.insertAdjacentHTML('afterend','<div id="pdfControls">'+
-      '<button class="settings" id="pdfPrev" type="button">← Anteriores</button>'+
-      '<span id="pdfNumber"></span>'+
-      '<button class="settings" id="pdfNext" type="button">Siguientes →</button></div>'+
-      '<div id="pdfPages"></div>'+download);
-    const pages=document.getElementById('pdfPages');
-    const previous=document.getElementById('pdfPrev'),next=document.getElementById('pdfNext');
-    async function renderPage(){
-      if(rendering||!current())return;
-      rendering=true;previous.disabled=next.disabled=true;
+    let firstRendered=page,lastRendered=page-1,observer=null,closed=false;
+    status.insertAdjacentHTML('afterend','<div id="pdfControls"><span id="pdfNumber"></span></div>'+
+      '<div id="pdfPages"></div><p id="pdfMore" role="status">Las páginas siguientes se cargan automáticamente al bajar.</p>'+download);
+    const pages=document.getElementById('pdfPages'),sentinel=document.getElementById('pdfMore');
+    function loadMore(){
+      if(closed||rendering||!current()||lastRendered>=pdf.numPages)return;
+      page=lastRendered+1;
+      renderPage(true);
+    }
+    function checkMore(){
+      if(!sentinel.isConnected||sentinel.hidden)return;
+      if(sentinel.getBoundingClientRect().top<=(window.innerHeight||800)+600)loadMore();
+    }
+    if(window.IntersectionObserver){
+      observer=new window.IntersectionObserver(entries=>{
+        if(entries.some(entry=>entry.isIntersecting))loadMore();
+      },{rootMargin:'600px 0px'});
+    }else{
+      window.addEventListener('scroll',checkMore,{passive:true});
+      window.addEventListener('resize',checkMore,{passive:true});
+    }
+    pdfPreviewTask={destroy(){
+      closed=true;observer?.disconnect();
+      window.removeEventListener('scroll',checkMore);window.removeEventListener('resize',checkMore);
+      reader.destroy();
+    }};
+    async function renderPage(append=false){
+      if(closed||rendering||!current())return;
+      rendering=true;observer?.disconnect();
       const ticket=++seq,last=Math.min(page+2,pdf.numPages);
-      pages.replaceChildren();
+      let completed=false;
+      if(!append){pages.replaceChildren();firstRendered=page;lastRendered=page-1}
+      sentinel.hidden=false;sentinel.textContent='Cargando páginas siguientes…';
       try{
         for(let number=page;number<=last;number++){
-          if(!current()||ticket!==seq)return;
+          if(!current()||ticket!==seq||closed)return;
           status.textContent='Cargando página '+number+' de '+pdf.numPages+'…';
           const one=await pdf.getPage(number);
-          if(!current()||ticket!==seq)return;
+          if(!current()||ticket!==seq||closed)return;
           const natural=one.getViewport({scale:1});
           const width=Math.max(250,Math.min(900,view.clientWidth-12));
           const pixelRatio=Math.min(window.devicePixelRatio||1,2);
@@ -1034,18 +1055,31 @@ async function openDriveFile(file,searchText='',ocrMatches=[]){
           canvas.style.height=Math.round(viewport.height/pixelRatio)+'px';
           pages.append(label,canvas);
           await one.render({canvasContext:canvas.getContext('2d'),viewport}).promise;
-          if(!current())return;
-          firstPageShown=true;
-          document.getElementById('pdfNumber').textContent=' Páginas '+page+'–'+number+' de '+pdf.numPages+' ';
-          // Allow the browser to paint page one before requesting pages two and three.
+          if(!current()||closed)return;
+          firstPageShown=true;lastRendered=number;
+          document.getElementById('pdfNumber').textContent=' Páginas '+firstRendered+'–'+number+' de '+pdf.numPages+' ';
+          // Paint each page as soon as it is ready, before requesting the next one.
           await new Promise(resolve=>requestAnimationFrame(()=>resolve()));
         }
-        if(current())status.textContent='Páginas '+page+'–'+last+' listas. El resto se carga al avanzar.';
-      }catch(error){if(current())status.textContent='No se pudo mostrar la página: '+error.message}
-      finally{rendering=false;if(current()){previous.disabled=page<=1;next.disabled=last>=pdf.numPages}}
+        completed=true;
+        if(current()){
+          status.textContent='Páginas '+firstRendered+'–'+lastRendered+' listas. Seguí bajando para continuar la lectura.';
+          sentinel.hidden=lastRendered>=pdf.numPages;
+          sentinel.textContent='Las páginas siguientes se cargan automáticamente al bajar.';
+        }
+      }catch(error){
+        if(current()){
+          status.textContent='No se pudo mostrar la página: '+error.message;
+          sentinel.textContent='La carga se interrumpió. Volvé a abrir el manual para reintentar.';
+        }
+      }finally{
+        rendering=false;
+        if(completed&&current()&&!closed&&!sentinel.hidden){
+          if(observer)observer.observe(sentinel);
+          else requestAnimationFrame(checkMore);
+        }
+      }
     }
-    previous.onclick=()=>{if(!rendering&&page>1){page=Math.max(1,page-3);renderPage()}};
-    next.onclick=()=>{if(!rendering&&page+2<pdf.numPages){page+=3;renderPage()}};
     const downloadButton=document.getElementById('pdfDownload');
     downloadButton.onclick=async()=>{
       if(downloadButton.disabled)return;

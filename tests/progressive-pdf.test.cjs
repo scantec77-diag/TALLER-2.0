@@ -34,7 +34,8 @@ test('leaving the manual cancels loading and prevents a late metadata response f
   await assert.rejects(reader.promise,/cancelada/);assert.equal(started,0);
 });
 function viewerContext(){
-  const nodes=new Map(),events=[];
+  const nodes=new Map(),events=[];let observeCallback,observed=false;
+  class Observer {constructor(callback){observeCallback=callback}observe(){observed=true}disconnect(){observed=false}}
   function element(){return {isConnected:true,style:{},textContent:'',disabled:false,children:[],
     append(...items){this.children.push(...items)},appendChild(item){this.children.push(item)},
     replaceChildren(...items){this.children=items},setAttribute(){},before(){},after(){},
@@ -44,21 +45,33 @@ function viewerContext(){
   const pdf={numPages:10,async getPage(page){events.push('get:'+page);return {getViewport:({scale})=>({width:400*scale,height:600*scale}),render(){events.push('render:'+page);return {promise:Promise.resolve()}},getTextContent(){throw Error('Text search must not block initial preview')}}},getData(){throw Error('Full download must be explicit')}};
   const context={driveListVersion:0,activeUser:{uid:'reader'},clearPdfPreview(){},recordLibraryVisit(){},driveTrail:[],driveFileLink:()=>'',folderHeader:()=>'',esc:s=>s,
     useServerLibrary:()=>true,bindTrailButtons(){},driveRequest(){},createProgressivePdf:()=>({promise:Promise.resolve(pdf),destroy(){}}),view,
-    window:{pdfjsLib:{PDFDataRangeTransport(){},GlobalWorkerOptions:{}},devicePixelRatio:1},
+    window:{pdfjsLib:{PDFDataRangeTransport(){},GlobalWorkerOptions:{}},devicePixelRatio:1,IntersectionObserver:Observer,removeEventListener(){}},
     document:{getElementById:id=>nodes.get(id),createElement:element},requestAnimationFrame:fn=>{events.push('paint');queueMicrotask(fn)},
     normalizeManualText:s=>s.toLowerCase(),setTimeout,URL,Blob,console};
   vm.createContext(context);
   const source=fs.readFileSync('index.html','utf8');
   vm.runInContext(source.slice(source.indexOf('async function openDriveFile('),source.indexOf('function settings(){')),context);
-  return {context,nodes,events};
+  return {context,nodes,events,intersect:()=>observeCallback([{isIntersecting:true}]),isObserved:()=>observed};
 }
 test('first page paints before pages two and three are requested; full text scanning waits for a click',async()=>{
-  const {context,nodes,events}=viewerContext();
+  const {context,nodes,events,intersect,isObserved}=viewerContext();
   await context.openDriveFile({id:'manual00001',name:'Manual.pdf',mimeType:'application/pdf'},'engine');
   assert.deepEqual(events,['get:1','render:1','paint','get:2','render:2','paint','get:3','render:3','paint']);
   assert.equal(nodes.get('pdfPages').children.length,6);
   assert.match(nodes.get('pdfStatus').textContent,/1–3 listas/);
-  assert.equal(nodes.get('pdfPrev').disabled,true);assert.equal(nodes.get('pdfNext').disabled,false);
-  nodes.get('pdfNext').onclick();await new Promise(setImmediate);
+  assert.equal(nodes.has('pdfNext'),false);assert.equal(isObserved(),true);
+  const firstCanvas=nodes.get('pdfPages').children[1];
+  intersect();intersect();await new Promise(setImmediate);
   assert.deepEqual(events.filter(x=>x.startsWith('get:')),['get:1','get:2','get:3','get:4','get:5','get:6']);
+  assert.equal(nodes.get('pdfPages').children.length,12);assert.equal(nodes.get('pdfPages').children[1],firstCanvas);
+  intersect();await new Promise(setImmediate);intersect();await new Promise(setImmediate);
+  assert.equal(nodes.get('pdfPages').children.length,20);assert.equal(nodes.get('pdfMore').hidden,true);assert.equal(isObserved(),false);
+  intersect();await new Promise(setImmediate);assert.equal(events.filter(x=>x.startsWith('get:')).length,10);
+});
+test('leaving a manual disconnects automatic loading and prevents new page requests',async()=>{
+  const {context,events,intersect,isObserved}=viewerContext();
+  await context.openDriveFile({id:'manual00001',name:'Manual.pdf',mimeType:'application/pdf'});
+  context.pdfPreviewTask.destroy();assert.equal(isObserved(),false);
+  intersect();await new Promise(setImmediate);
+  assert.equal(events.filter(x=>x.startsWith('get:')).length,3);
 });
