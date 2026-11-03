@@ -90,7 +90,7 @@ function checkLibraryRole_(uid,token){
   const status=roles.fields?.status?.stringValue||'active';
   if(status==='blocked')throw Error('Tu acceso a Taller está bloqueado. Consultá al administrador.');
   if(status==='deleted')throw Error('Tu acceso a Taller fue eliminado. Consultá al administrador.');
-  if(role!=='admin'&&role!=='reader')throw Error('Tu usuario todavía no tiene permiso de biblioteca.');
+  if(role!=='admin'&&role!=='reader'&&role!=='editor')throw Error('Tu usuario todavía no tiene permiso de biblioteca.');
 }
 function driveApi_(relative,opt){
   const url='https://www.googleapis.com/drive/v3/'+relative;
