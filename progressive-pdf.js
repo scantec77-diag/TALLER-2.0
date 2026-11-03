@@ -38,10 +38,15 @@ export function createProgressivePdf({lib, file, request, onProgress = () => {},
     transport.abort = () => { controller.abort(); };
     transport.requestDataRange = (begin, end) => {
       (async () => {
+        // PDF.js registers the range reader AFTER calling requestDataRange.
+        // Cached responses must yield too, just like a network response does.
+        await Promise.resolve();
         if (stopped) return;
         const prepared = initial.find(chunk => chunk.start <= begin && chunk.start + chunk.bytes.length >= end);
         if (prepared) {
-          transport.onDataRange(begin, prepared.bytes.subarray(begin - prepared.start, end - prepared.start));
+          // PDF.js may transfer this buffer to its worker. Keep cached bytes
+          // intact for overlapping or repeated requests.
+          transport.onDataRange(begin, prepared.bytes.slice(begin - prepared.start, end - prepared.start));
           return;
         }
         const response = await request(base + '?alt=media', {
@@ -70,4 +75,5 @@ export function createProgressivePdf({lib, file, request, onProgress = () => {},
   })();
   return {promise: Promise.race([loading, failure]), destroy: () => stop()};
 }
+
 

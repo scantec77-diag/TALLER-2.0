@@ -69,6 +69,47 @@ test('invalid prepared bytes cannot start the PDF reader',async()=>{
  const reader=loadReader()({lib:{getDocument(){starts++}},file:{id:'manual00001'},request:async()=>Response.json({size:10,initialChunks:[{start:0,length:10,size:10,base64:'AQ=='}]})});
  await assert.rejects(reader.promise,/fragmento inicial inválido/);assert.equal(starts,0);
 });
+test('prepared ranges wait for PDF.js to register each range reader',async()=>{
+ const size=1024*1024,chunk=384*1024,tail=2*chunk,registered=new Set(),delivered=[];
+ let transport,finish;
+ class Range {
+  constructor(){transport=this}
+  onDataRange(begin,bytes){
+   assert.ok(registered.has(begin),'_onReceiveData - no PDFDataTransportStreamRangeReader instance found');
+   delivered.push([begin,bytes.length,bytes[0]]);
+   // The real PDF worker takes ownership of the delivered ArrayBuffer.
+   structuredClone(bytes,{transfer:[bytes.buffer]});
+   if(delivered.length===2)finish({numPages:60});
+  }
+ }
+ const lib={PDFDataRangeTransport:Range,getDocument(){
+  queueMicrotask(()=>{
+   // PDF.js 3.11 calls requestDataRange before adding its reader to the list.
+   for(const [begin,end] of [[tail,size],[tail+10,tail+30]]){
+    transport.requestDataRange(begin,end);registered.add(begin);
+   }
+  });
+  return {promise:new Promise(r=>finish=r),destroy:async()=>{}};
+ }};
+ const reader=loadReader()({lib,file:{id:'manual00001'},request:async()=>Response.json({size,initialChunks:[
+  {start:tail,length:size-tail,size,base64:Buffer.alloc(size-tail,7).toString('base64')}
+ ]})});
+ assert.equal((await reader.promise).numPages,60);
+ assert.deepEqual(delivered,[[tail,size-tail,7],[tail+10,20,7]]);reader.destroy();
+});
+test('closing the manual suppresses a queued prepared response',async()=>{
+ let delivered=0,reader;
+ class Range {onDataRange(){delivered++}}
+ const lib={PDFDataRangeTransport:Range,getDocument({range}){
+  queueMicrotask(()=>{range.requestDataRange(0,10);reader.destroy()});
+  return {promise:new Promise(()=>{}),destroy:async()=>{}};
+ }};
+ reader=loadReader()({lib,file:{id:'manual00001'},request:async()=>Response.json({size:10,initialChunks:[
+  {start:0,length:10,size:10,base64:Buffer.alloc(10).toString('base64')}
+ ]})});
+ await assert.rejects(reader.promise,/cancelada/);await new Promise(setImmediate);
+ assert.equal(delivered,0);
+});
 test('first page paints before pages two and three are requested; full text scanning waits for a click',async()=>{
   const {context,nodes,events,intersect,isObserved}=viewerContext();
   await context.openDriveFile({id:'manual00001',name:'Manual.pdf',mimeType:'application/pdf'},'engine');
@@ -91,4 +132,5 @@ test('leaving a manual disconnects automatic loading and prevents new page reque
   intersect();await new Promise(setImmediate);
   assert.equal(events.filter(x=>x.startsWith('get:')).length,3);
 });
+
 

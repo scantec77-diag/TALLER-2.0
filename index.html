@@ -73,7 +73,7 @@ header .header-brand{min-width:0}
 <script type="module">
 import { openTallerIA } from './taller-ia.js';
 import { createLibraryServer } from './library-server.js?v=20261103d';
-import { createProgressivePdf } from './progressive-pdf.js?v=20261103d';
+import { createProgressivePdf } from './progressive-pdf.js?v=20261103e';
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js';
 import { getAuth, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, linkWithPopup, reauthenticateWithPopup, signOut } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js';
 import { getFirestore, doc, getDoc, setDoc, collection, getDocs, increment, serverTimestamp, addDoc, query, orderBy, limit, startAfter, onSnapshot, writeBatch } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js';
@@ -1203,4 +1203,5 @@ function addMachine(){if(!isAdmin)return;const name=document.getElementById('mac
 function removeMachine(i){if(!isAdmin||!config.machines[i])return;config.removed.push(config.machines[i].folder);config.machines.splice(i,1);persist();settings()}
 Object.assign(window,{home,notes,commonSpace,tallerIA,manualContentSearch,pushSettings,openMachine,settings,addMachine,removeMachine,saveRoot,manageConnection,accessDashboard,reconnectManuals});
 </script></body></html>
+
 
