@@ -1,8 +1,13 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    function signedIn() {
+    function authenticated() {
       return request.auth != null && request.auth.token.email_verified == true;
+    }
+    function signedIn() {
+      return authenticated()
+        && (!exists(/databases/$(database)/documents/roles/$(request.auth.uid))
+          || !(get(/databases/$(database)/documents/roles/$(request.auth.uid)).data.get('status', 'active') in ['blocked','deleted']));
     }
     function owner(uid) {
       return signedIn() && request.auth.uid == uid;
@@ -184,9 +189,21 @@ service cloud.firestore {
       allow delete: if accessAdmin();
     }
     match /roles/{uid} {
-      allow read: if owner(uid);
-      allow write: if false;
+      // Revoked users can still observe their own status and sign out.
+      allow get: if (authenticated() && request.auth.uid == uid) || accessAdmin();
+      allow list: if accessAdmin();
+      function validManagement() {
+        return accessAdmin() && request.auth.uid != uid
+          && request.resource.data.role == 'reader'
+          && request.resource.data.status in ['active','blocked','deleted']
+          && request.resource.data.updatedAt == request.time
+          && request.resource.data.updatedBy == request.auth.uid;
+      }
+      allow create: if validManagement()
+        && request.resource.data.keys().hasOnly(['role','status','updatedAt','updatedBy']);
+      allow update: if validManagement() && resource.data.get('role', '') != 'admin'
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['role','status','updatedAt','updatedBy']);
+      allow delete: if false;
     }
   }
 }
-
