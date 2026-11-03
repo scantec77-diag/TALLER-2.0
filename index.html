@@ -286,10 +286,10 @@ async function endRevokedAccess(user,status){
 async function changeUserAccess(uid,action){
   const user=accessUsers.get(uid);
   if(!activeUser||!isAdmin||!user||uid===activeUser.uid||user.role==='admin')return;
-  const status={approve:'active',block:'blocked',unblock:'active',delete:'deleted'}[action];
+  const status={approve:'active',grantEditor:'active',revokeEditor:'active',block:'blocked',unblock:'active',delete:'deleted'}[action];
   if(!status)return;
   const label=user.displayName||user.email||'este usuario';
-  const prompt=action==='approve'?'¿Autorizar a '+label+' como lector de manuales (reader)?':action==='delete'?'¿Eliminar el acceso de '+label+' a Taller? No podrá entrar. Sus notas y el historial se conservan; no se elimina su cuenta de Google.':
+  const prompt=action==='grantEditor'?'¿Permitir a '+label+' editar y guardar manuales cuando esté habilitado el servicio seguro de edición?':action==='revokeEditor'?'¿Quitar a '+label+' el permiso de edición y mantener la lectura?':action==='approve'?'¿Autorizar a '+label+' como lector de manuales (reader)?':action==='delete'?'¿Eliminar el acceso de '+label+' a Taller? No podrá entrar. Sus notas y el historial se conservan; no se elimina su cuenta de Google.':
     action==='block'?'¿Bloquear el acceso de '+label+' a Taller y a los manuales?':'¿Desbloquear el acceso de '+label+' a Taller?';
   if(!window.confirm(prompt))return;
   const currentAdmin=activeUser.uid;
@@ -300,9 +300,10 @@ async function changeUserAccess(uid,action){
     const roleRef=doc(db,'roles',uid),existing=await getDoc(roleRef);
     if(existing.exists()&&existing.data().role==='admin')throw Error('Esta cuenta es administradora y está protegida.');
     if(activeUser?.uid!==currentAdmin||!isAdmin)return;
-    await setDoc(roleRef,{role:'reader',status,updatedAt:serverTimestamp(),updatedBy:currentAdmin},{merge:true});
+    const role=action==='grantEditor'?'editor':action==='revokeEditor'||action==='approve'?'reader':existing.exists()&&['reader','editor'].includes(existing.data().role)?existing.data().role:'reader';
+    await setDoc(roleRef,{role,status,updatedAt:serverTimestamp(),updatedBy:currentAdmin},{merge:true});
     const verified=await getDoc(roleRef);
-    if(!verified.exists()||verified.data().status!==status||verified.data().role!=='reader')throw Error('No se pudo verificar el permiso reader.');
+    if(!verified.exists()||verified.data().status!==status||verified.data().role!==role)throw Error('No se pudo verificar el permiso reader.');
     if(activeUser?.uid===currentAdmin&&isAdmin)await accessDashboard();
   }catch(error){
     if(statusEl?.isConnected)statusEl.textContent='No se pudo cambiar el acceso: '+(error.code||error.message);
@@ -342,9 +343,9 @@ async function accessDashboard(){
       const foldersCount=folders.reduce((n,x)=>n+(Number(x.visitCount)||0),0);
       const filesCount=files.reduce((n,x)=>n+(Number(x.visitCount)||0),0);
       const protectedAccount=u.uid===currentAdmin||u.role==='admin';
-      const state=u.status==='deleted'?'Acceso eliminado':u.status==='blocked'?'Bloqueado':u.role==='reader'?'Lector autorizado':'Pendiente de autorización para manuales';
+      const state=u.status==='deleted'?'Acceso eliminado':u.status==='blocked'?'Bloqueado':u.role==='editor'?'Editor autorizado':u.role==='reader'?'Lector autorizado':'Pendiente de autorización para manuales';
       const actions=protectedAccount?'<small>Cuenta administradora protegida</small>':
-        '<div>'+(u.role!=='reader'&&!accessDenied(u)?'<button type="button" class="settings" data-user-action="approve" data-user="'+esc(u.uid)+'">✅ Autorizar manuales (reader)</button>':'')+'<button type="button" class="settings" data-user-action="'+(accessDenied(u)?'unblock':'block')+'" data-user="'+esc(u.uid)+'">'+(accessDenied(u)?'🔓 Desbloquear':'🔒 Bloquear')+'</button>'+
+        '<div>'+(u.role!=='reader'&&u.role!=='editor'&&!accessDenied(u)?'<button type="button" class="settings" data-user-action="approve" data-user="'+esc(u.uid)+'">✅ Autorizar manuales (reader)</button>':'')+(!accessDenied(u)&&['reader','editor'].includes(u.role)?'<button type="button" class="settings" data-user-action="'+(u.role==='editor'?'revokeEditor':'grantEditor')+'" data-user="'+esc(u.uid)+'">'+(u.role==='editor'?'☑ Puede editar · Quitar permiso':'☐ Puede editar · Autorizar')+'</button>':'')+'<button type="button" class="settings" data-user-action="'+(accessDenied(u)?'unblock':'block')+'" data-user="'+esc(u.uid)+'">'+(accessDenied(u)?'🔓 Desbloquear':'🔒 Bloquear')+'</button>'+
         (u.status==='deleted'?'':'<button type="button" class="settings" data-user-action="delete" data-user="'+esc(u.uid)+'">🗑 Eliminar</button>')+'</div>';
       return '<section class="access-person'+(u.status==='deleted'?' access-deleted':u.status==='blocked'?' access-blocked':'')+'"><strong>'+esc(u.displayName||'Nombre no disponible')+'</strong>'+
         '<small>'+esc(u.email||'')+'</small><small>Estado: '+state+'</small>'+actions+
