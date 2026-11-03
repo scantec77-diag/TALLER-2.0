@@ -28,7 +28,8 @@ export function createProgressivePdf({lib, file, request, onProgress = () => {},
       (async () => {
         if (stopped) return;
         const response = await request(base + '?alt=media', {
-          headers: {Range: 'bytes=' + begin + '-' + (end - 1)}, signal: controller.signal
+          headers: {Range: 'bytes=' + begin + '-' + (end - 1)}, signal: controller.signal,
+          libraryFile: {...meta, id: file.id}
         });
         if (stopped) return;
         const contentRange = response.headers.get('Content-Range');
@@ -52,3 +53,4 @@ export function createProgressivePdf({lib, file, request, onProgress = () => {},
   })();
   return {promise: Promise.race([loading, failure]), destroy: () => stop()};
 }
+

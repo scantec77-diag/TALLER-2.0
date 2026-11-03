@@ -38,6 +38,23 @@ test('library adapter cannot write files or call another service',async()=>{
  await assert.rejects(ctx.libraryDriveResponse(request,'https://evil.example/drive/v3/files/manual00001'),/no admitida/);
  await assert.rejects(ctx.libraryDriveResponse(request,'https://www.googleapis.com/drive/v3/files/manual00001',{method:'DELETE'}),/no admitida/);assert.equal(calls,0);
 });
+test('PDF range reads reuse opening metadata while every block still reaches the authorized server',async()=>{
+ const ctx=clientContext(),calls=[];
+ const request=async(method,args)=>{calls.push(method);if(method==='metadatosArchivo')throw Error('Redundant metadata request');return {start:args[1],length:4,size:12,base64:Buffer.from([1,2,3,4]).toString('base64')}};
+ const file={id:'manual00001',size:12,mimeType:'application/pdf'};
+ for(const range of ['bytes=0-3','bytes=4-7','bytes=8-11']){
+  const response=await ctx.libraryDriveResponse(request,'https://www.googleapis.com/drive/v3/files/manual00001?alt=media',{headers:{Range:range},libraryFile:file});
+  assert.equal(response.status,206);assert.equal((await response.arrayBuffer()).byteLength,4);
+ }
+ assert.deepEqual(calls,['bloqueArchivo','bloqueArchivo','bloqueArchivo']);
+ await assert.rejects(ctx.libraryDriveResponse(async()=>{throw Error('Tu acceso está bloqueado')},'https://www.googleapis.com/drive/v3/files/manual00001?alt=media',{headers:{Range:'bytes=0-3'},libraryFile:file}),/bloqueado/);
+});
+test('reused metadata cannot silently read a changed PDF or a different file',async()=>{
+ const ctx=clientContext();let metadata=0;
+ const request=async(method,args)=>{if(method==='metadatosArchivo'){metadata++;return {size:12}}return {start:args[1],length:4,size:16,base64:Buffer.from([1,2,3,4]).toString('base64')}};
+ await assert.rejects(ctx.libraryDriveResponse(request,'https://www.googleapis.com/drive/v3/files/manual00001?alt=media',{headers:{Range:'bytes=0-3'},libraryFile:{id:'otherfile001',size:12}}),/archivo cambió/);
+ assert.equal(metadata,1);
+});
 function backend(role='reader',provider='google.com'){
  const cache=new Map(),ctx={console,Utilities:{DigestAlgorithm:{SHA_256:'sha'},computeDigest:()=>[1,2,3]},CacheService:{getScriptCache:()=>({get:k=>cache.get(k),put:(k,v)=>cache.set(k,v)})}};
  vm.createContext(ctx);vm.runInContext(fs.readFileSync('apps-script/Code.gs','utf8'),ctx);
@@ -61,3 +78,4 @@ test('standard-user reconnect never starts the shared Google-account popup',asyn
  const ctx={activeUser:{uid:'reader'},auth:{currentUser:{uid:'reader'}},useServerLibrary:()=>true,libraryServer:{connect:async()=>connects++},signInWithPopup(){popups++},reauthenticateWithPopup(){popups++}};
  vm.createContext(ctx);vm.runInContext(html.slice(start,end),ctx);await ctx.authorizeDriveAccount();assert.equal(connects,1);assert.equal(popups,0);
 });
+

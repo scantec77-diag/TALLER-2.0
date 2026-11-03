@@ -86,7 +86,11 @@ export async function libraryDriveResponse(request, input, options = {}) {
     return new Response(Uint8Array.from(atob(result.base64), c => c.charCodeAt(0)), {headers: {'Content-Type': 'application/pdf'}});
   }
   if (url.searchParams.get('alt') !== 'media') return json(await request('metadatosArchivo', [id]));
-  const meta = await request('metadatosArchivo', [id]);
+  // Reuse metadata already fetched for this open PDF. Each block RPC still
+  // validates the current session, role and library membership on the server.
+  const known = options.libraryFile;
+  const meta = known?.id === id && Number.isSafeInteger(Number(known.size)) && Number(known.size) > 0
+    ? known : await request('metadatosArchivo', [id]);
   const size = Number(meta.size) || 0, range = new Headers(options.headers).get('Range');
   const bounds = range?.match(/^bytes=(\d+)-(\d*)$/);
   if (range && !bounds) throw Error('Rango de lectura no admitido.');
@@ -97,6 +101,7 @@ export async function libraryDriveResponse(request, input, options = {}) {
   while (offset <= end) {
     if (options.signal?.aborted) throw new DOMException('Lectura cancelada.', 'AbortError');
     const result = await request('bloqueArchivo', [id, offset]);
+    if (result.size != null && Number(result.size) !== size) throw Error('El archivo cambió. Volvé a abrir el manual.');
     if (result.start !== offset || !result.length) throw Error('La biblioteca devolvió un bloque incompleto.');
     const bytes = Uint8Array.from(atob(result.base64), c => c.charCodeAt(0));
     if (bytes.length !== result.length) throw Error('El bloque recibido no coincide con su tamaño.');
@@ -107,3 +112,4 @@ export async function libraryDriveResponse(request, input, options = {}) {
   if (bounds) headers['Content-Range'] = 'bytes ' + start + '-' + end + '/' + size;
   return new Response(new Blob(chunks), {status: bounds ? 206 : 200, headers});
 }
+
