@@ -1051,6 +1051,45 @@ async function openDriveFile(file,searchText='',ocrMatches=[]){
       }catch(error){if(status?.isConnected)status.textContent='No se pudo leer el DOCX: '+error.message}
       finally{if(previewButton.isConnected)previewButton.disabled=false}
     };
+    // DOCX can be rendered locally with Mammoth, without exposing the file to a third-party viewer.
+    // Legacy binary DOC requires a trusted server-side converter for reliable layout preservation.
+    if(isDocx&&!searchText){
+      const status=document.getElementById(wordStatusId);
+      if(status?.isConnected)status.textContent='Abriendo documento Word dentro de Taller…';
+      try{
+        if(Number(file.size)>25000000)throw Error('El documento supera el límite de lectura de 25 MB.');
+        const response=await driveRequest('https://www.googleapis.com/drive/v3/files/'+encodeURIComponent(file.id)+'?alt=media');
+        const buffer=await response.arrayBuffer();
+        const mammoth=await loadMammoth();
+        const result=await mammoth.convertToHtml({arrayBuffer:buffer},{
+          convertImage:mammoth.images.imgElement(async image=>{
+            const base64=await image.read('base64');
+            const type=/^image\\/(png|jpeg|gif|webp)$/i.test(image.contentType)?image.contentType:'image/png';
+            return {src:'data:'+type+';base64,'+base64};
+          })
+        });
+        if(version!==driveListVersion||!status?.isConnected)return;
+        const article=document.createElement('article');
+        article.id='documentTextPreview';
+        article.style.cssText='overflow-wrap:anywhere;overflow:auto;max-height:78vh;text-align:left;padding:16px;border:1px solid #405c7a;border-radius:10px;margin-top:12px;background:#fff;color:#17212d;line-height:1.55';
+        // Mammoth produces HTML from a document; strip active content before inserting it.
+        const doc=new DOMParser().parseFromString(result.value||'', 'text/html');
+        doc.querySelectorAll('script,iframe,object,embed,form,style,link,svg,math').forEach(el=>el.remove());
+        doc.querySelectorAll('*').forEach(el=>{
+          [...el.attributes].forEach(attr=>{
+            if(/^on/i.test(attr.name)||attr.name==='style'||(attr.name==='href'&&!/^(https?:|#)/i.test(attr.value))||(attr.name==='src'&&!/^data:image\\/(png|jpeg|gif|webp);base64,/i.test(attr.value)))el.removeAttribute(attr.name);
+          });
+        });
+        article.innerHTML=doc.body.innerHTML;
+        article.querySelectorAll('img').forEach(img=>{img.style.maxWidth='100%';img.style.height='auto'});
+        article.querySelectorAll('table').forEach(table=>{table.style.maxWidth='100%';table.style.display='block';table.style.overflowX='auto'});
+        status.after(article);
+        status.textContent='Documento abierto dentro de Taller. Algunos formatos avanzados pueden variar.';
+      }catch(error){if(status?.isConnected)status.textContent='No se pudo abrir el DOCX aquí ('+error.message+'). Podés usar «Abrir con aplicación».'}
+    }else if(isLegacyDoc&&!searchText){
+      const status=document.getElementById(wordStatusId);
+      if(status?.isConnected)status.textContent='Este archivo .doc antiguo necesita conversión para verse fielmente dentro de Taller. Por ahora usá «Abrir con aplicación»; el documento original no se modifica.';
+    }
     if(searchText&&(isDocx||isGoogleDoc)){
       const status=document.getElementById(wordStatusId);
       try{
