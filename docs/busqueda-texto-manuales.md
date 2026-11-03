@@ -19,7 +19,7 @@ La primera pasada puede demorar según cantidad y tamaño de los PDF. Los manual
 
 ## Reconexión
 
-- Todos los usuarios con sesión iniciada tienen **⟳ Reconexión** en la pantalla principal. Renueva el acceso de lectura con la cuenta de manuales preseleccionada; Google puede solicitar selección de cuenta o verificación.
+- Todos los usuarios con sesión iniciada tienen **⟳ Reconectar** en la pantalla principal. Renueva el acceso de lectura con la cuenta de manuales preseleccionada; Google puede solicitar selección de cuenta o verificación.
 - El permiso de lectura y la sesión temporal de Drive son distintos. La sesión de esta aplicación se renueva cuando vence; no se guarda ninguna contraseña de Google en la aplicación.
 - Si el acceso vence durante la indexación, se pausa una vez y aparece **Reconectar y continuar**. No se marca el resto de los PDF como fallidos. Al reconectar se retoma el último bloque pendiente.
 - Los errores propios de cada PDF se muestran con su nombre. Una interrupción de conexión o de permisos de Firestore también pausa el trabajo, conservando los bloques confirmados.

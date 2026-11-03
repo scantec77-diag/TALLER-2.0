@@ -125,7 +125,7 @@ test('home exposes reconnection to standard signed-in users',()=>{
  const start=html.indexOf('function home(){'),end=html.indexOf('async function manualContentSearch()',start);
  const ctx={activeUser:{uid:'reader'},isAdmin:false,driveListVersion:0,clearPdfPreview(){},view:{innerHTML:''},config:{machines:[]}};
  vm.createContext(ctx);vm.runInContext(html.slice(start,end),ctx);ctx.home();
- assert(ctx.view.innerHTML.includes('⟳ Reconexión'));assert(!ctx.view.innerHTML.includes('Gestionar conexión'));
+ assert(ctx.view.innerHTML.includes('⟳ Reconectar'));assert(!ctx.view.innerHTML.includes('Gestionar conexión'));
  assert(!ctx.view.innerHTML.includes('manuales.taller.exolgan@gmail.com'));
 });
 test('OCR pause button reconnects only from a new click and then resumes',async()=>{
