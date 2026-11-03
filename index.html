@@ -273,15 +273,51 @@ async function recordLibraryVisit(kind,id,name,path){
     console.warn('No se pudo registrar una apertura de la biblioteca:',e.code||e.message);
   }
 }
+let accessUsers=new Map(),stopAccessRole=null;
+function accessDenied(role){return ['blocked','deleted'].includes(role?.status)}
+async function endRevokedAccess(user,status){
+  if(auth.currentUser?.uid!==user.uid)return;
+  clearPdfPreview();libraryServer.close();clearCommonNotifications();forgetAccessSession();
+  activeUser=null;isAdmin=false;
+  await signOut(auth);
+  const hint=document.getElementById('authMessage');
+  if(hint)hint.textContent=status==='deleted'?'Tu acceso a Taller fue eliminado. Consultá al administrador.':'Tu acceso a Taller está bloqueado. Consultá al administrador.';
+}
+async function changeUserAccess(uid,action){
+  const user=accessUsers.get(uid);
+  if(!activeUser||!isAdmin||!user||uid===activeUser.uid||user.role==='admin')return;
+  const status={block:'blocked',unblock:'active',delete:'deleted'}[action];
+  if(!status)return;
+  const label=user.displayName||user.email||'este usuario';
+  const prompt=action==='delete'?'¿Eliminar el acceso de '+label+' a Taller? No podrá entrar. Sus notas y el historial se conservan; no se elimina su cuenta de Google.':
+    action==='block'?'¿Bloquear el acceso de '+label+' a Taller y a los manuales?':'¿Desbloquear el acceso de '+label+' a Taller?';
+  if(!window.confirm(prompt))return;
+  const currentAdmin=activeUser.uid;
+  const statusEl=document.getElementById('accessActionStatus');
+  const buttons=[...view.querySelectorAll('[data-user-action]')];buttons.forEach(button=>button.disabled=true);
+  try{
+    // Re-read immediately so stale cards cannot overwrite a newly promoted administrator.
+    const roleRef=doc(db,'roles',uid),existing=await getDoc(roleRef);
+    if(existing.exists()&&existing.data().role==='admin')throw Error('Esta cuenta es administradora y está protegida.');
+    if(activeUser?.uid!==currentAdmin||!isAdmin)return;
+    await setDoc(roleRef,{role:'reader',status,updatedAt:serverTimestamp(),updatedBy:currentAdmin},{merge:true});
+    const verified=await getDoc(roleRef);
+    if(!verified.exists()||verified.data().status!==status)throw Error('No se pudo verificar el cambio.');
+    if(activeUser?.uid===currentAdmin&&isAdmin)await accessDashboard();
+  }catch(error){
+    if(statusEl?.isConnected)statusEl.textContent='No se pudo cambiar el acceso: '+(error.code||error.message);
+  }finally{buttons.forEach(button=>{if(button.isConnected)button.disabled=false})}
+}
 async function accessDashboard(){
   if(!activeUser||!isAdmin)return home();
   const currentAdmin=activeUser.uid;
   view.innerHTML='<button class="back" onclick="home()">← Volver</button><h2>👥 Accesos</h2><p id="accessStatus">Cargando registros...</p>';
   try{
-    const snap=await getDocs(collection(db,'accessStats'));
+    const [snap,roleSnap]=await Promise.all([getDocs(collection(db,'accessStats')),getDocs(collection(db,'roles'))]);
+    const roleMap=new Map(roleSnap.docs.map(d=>[d.id,d.data()]));
     if(activeUser?.uid!==currentAdmin||!isAdmin||!document.getElementById('accessStatus'))return;
     const users=await Promise.all(snap.docs.map(async d=>{
-      const data=d.data();
+      const data={...d.data(),...roleMap.get(d.id),uid:d.id};
       try{
         const visits=await getDocs(collection(db,'users',d.id,'libraryVisits'));
         return {...data,items:visits.docs.map(x=>x.data()),readError:''};
@@ -290,6 +326,7 @@ async function accessDashboard(){
       }
     }));
     if(activeUser?.uid!==currentAdmin||!isAdmin||!document.getElementById('accessStatus'))return;
+    accessUsers=new Map(users.map(user=>[user.uid,user]));
     users.sort((a,b)=>(b.lastAccess?.toMillis?.()||0)-(a.lastAccess?.toMillis?.()||0));
     const dateOf=stamp=>stamp?.toDate?.()?.toLocaleString('es-AR',{dateStyle:'short',timeStyle:'short'})||'Sin fecha';
     const totalEntries=users.reduce((n,u)=>n+(Number(u.accessCount)||0),0);
@@ -304,8 +341,13 @@ async function accessDashboard(){
       ).join('')||'<p>No hay aperturas registradas.</p>';
       const foldersCount=folders.reduce((n,x)=>n+(Number(x.visitCount)||0),0);
       const filesCount=files.reduce((n,x)=>n+(Number(x.visitCount)||0),0);
-      return '<section class="access-person"><strong>'+esc(u.displayName||'Nombre no disponible')+'</strong>'+
-        '<small>'+esc(u.email||'')+'</small>'+
+      const protectedAccount=u.uid===currentAdmin||u.role==='admin';
+      const state=u.status==='deleted'?'Acceso eliminado':u.status==='blocked'?'Bloqueado':'Activo';
+      const actions=protectedAccount?'<small>Cuenta administradora protegida</small>':
+        '<div><button type="button" class="settings" data-user-action="'+(accessDenied(u)?'unblock':'block')+'" data-user="'+esc(u.uid)+'">'+(accessDenied(u)?'🔓 Desbloquear':'🔒 Bloquear')+'</button>'+
+        (u.status==='deleted'?'':'<button type="button" class="settings" data-user-action="delete" data-user="'+esc(u.uid)+'">🗑 Eliminar</button>')+'</div>';
+      return '<section class="access-person"'+(u.status==='deleted'?' data-deleted="true" hidden':'')+'><strong>'+esc(u.displayName||'Nombre no disponible')+'</strong>'+
+        '<small>'+esc(u.email||'')+'</small><small>Estado: '+state+'</small>'+actions+
         '<small>🔁 Ingresos: '+(Number(u.accessCount)||0)+' · 🕒 Último: '+esc(dateOf(u.lastAccess))+'</small>'+
         (u.readError?'<small role="alert">No se pudo leer la actividad de biblioteca ('+esc(u.readError)+'). Revisá las reglas de Firebase.</small>':
         '<details><summary>📁 Carpetas: '+foldersCount+' · 📄 Documentos: '+filesCount+'</summary>'+
@@ -318,7 +360,11 @@ async function accessDashboard(){
       '<div class="access-sum"><span><strong>'+users.length+'</strong>Usuarios</span>'+
       '<span><strong>'+totalEntries+'</strong>Ingresos</span><span><strong>'+totalFolders+'</strong>Carpetas</span>'+
       '<span><strong>'+totalFiles+'</strong>Documentos</span></div>'+
-      '<button class="settings" onclick="accessDashboard()">⟳ Actualizar</button>'+cards;
+      '<button class="settings" onclick="accessDashboard()">⟳ Actualizar</button>'+
+      '<label><input type="checkbox" id="showDeletedUsers" style="width:auto"> Mostrar accesos eliminados</label>'+
+      '<p id="accessActionStatus" role="status"></p>'+cards;
+    view.querySelectorAll('[data-user-action]').forEach(button=>button.onclick=()=>changeUserAccess(button.dataset.user,button.dataset.userAction));
+    document.getElementById('showDeletedUsers').onchange=event=>view.querySelectorAll('[data-deleted]').forEach(card=>card.hidden=!event.target.checked);
   }catch(e){
     const el=document.getElementById('accessStatus');
     if(el)el.textContent='No se pudo leer el registro ('+(e.code||'error')+'). Para ver usuarios necesitás rol de administrador y reglas publicadas en Firebase.';
@@ -339,6 +385,7 @@ function loginScreen(){
   };
 }
 onAuthStateChanged(auth,async user=>{
+  if(stopAccessRole){stopAccessRole();stopAccessRole=null}
   const accountMenu=document.getElementById('accountMenu');
   accountMenu.open=false;accountMenu.hidden=true;accountMenu.style.display='none';
   weatherStop();
@@ -362,7 +409,11 @@ onAuthStateChanged(auth,async user=>{
     try{role=await getDoc(doc(db,'roles',user.uid))}
     catch(e){console.warn('No se pudo consultar el rol; se usará acceso estándar.',e.code||e.message)}
     if(auth.currentUser?.uid!==user.uid)return;
+    if(role?.exists()&&accessDenied(role.data())){await endRevokedAccess(user,role.data().status);return}
     activeUser=user;
+    stopAccessRole=onSnapshot(doc(db,'roles',user.uid),snapshot=>{
+      if(snapshot.exists()&&accessDenied(snapshot.data()))endRevokedAccess(user,snapshot.data().status).catch(()=>{});
+    },error=>console.warn('No se pudo comprobar el estado de acceso:',error.code));
     // Se usa la biblioteca fija, sin heredar vínculos antiguos de este dispositivo.
     driveOwnerEmail=DEFAULT_DRIVE_EMAIL;
     if(auth.currentUser?.uid!==user.uid)return;

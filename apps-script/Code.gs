@@ -21,7 +21,7 @@ function doPost(e){
     const folder=String(params.folderId||LIBRARY_ROOT_);
     const info=allowedFile_(folder,true);
     const session=Utilities.getUuid()+'-'+Utilities.getUuid();
-    CacheService.getScriptCache().put('library_'+session,user.uid,21600);
+    CacheService.getScriptCache().put('library_'+session,JSON.stringify({uid:user.uid,token:String(params.idToken||'')}),21600);
     const t=HtmlService.createTemplateFromFile('Biblioteca');
     t.sessionJson=JSON.stringify(session);
     t.bridgeJson=JSON.stringify(params.mode==='bridge');
@@ -43,9 +43,13 @@ function doPost(e){
 }
 function validSession_(session){
   if(!/^[0-9a-f-]{73}$/.test(String(session||'')))throw Error('Sesión inválida. Volvé a ingresar desde Taller 2.0.');
-  const uid=CacheService.getScriptCache().get('library_'+session);
-  if(!uid)throw Error('La sesión de biblioteca venció. Volvé a ingresar desde Taller 2.0.');
-  return uid;
+  const stored=CacheService.getScriptCache().get('library_'+session);
+  if(!stored)throw Error('La sesión de biblioteca venció. Volvé a ingresar desde Taller 2.0.');
+  let identity;try{identity=JSON.parse(stored)}catch(_){}
+  if(!identity?.uid||!identity?.token)throw Error('Sesión inválida. Reconectá la biblioteca.');
+  // Recheck revocation on every operation; a cached session is not permission.
+  checkLibraryRole_(identity.uid,identity.token);
+  return identity.uid;
 }
 function jsonRequest_(url,opt){
   const response=UrlFetchApp.fetch(url,Object.assign({muteHttpExceptions:true,followRedirects:true},opt||{}));
@@ -61,7 +65,7 @@ function validUser_(token){
     .map(x=>(x<0?x+256:x).toString(16).padStart(2,'0')).join('');
   const cache=CacheService.getScriptCache();
   const previous=cache.get('auth_'+key);
-  if(previous)return {uid:previous};
+  if(previous){checkLibraryRole_(previous,token);return {uid:previous}};
   const verify=jsonRequest_('https://identitytoolkit.googleapis.com/v1/accounts:lookup?key='+encodeURIComponent(FIREBASE_WEB_API_KEY_),{
     method:'post',contentType:'application/json',payload:JSON.stringify({idToken:token})
   });
@@ -69,14 +73,24 @@ function validUser_(token){
   if(!user||!user.localId||!user.emailVerified)throw Error('Cuenta no verificada.');
   const providers=user.providerUserInfo||[];
   if(!providers.some(p=>p.providerId==='google.com'))throw Error('Ingresá con Google.');
-  const uid=encodeURIComponent(user.localId);
-  const roleUrl='https://firestore.googleapis.com/v1/projects/'+FIREBASE_PROJECT_+
-    '/databases/(default)/documents/roles/'+uid;
-  const roles=jsonRequest_(roleUrl,{headers:{Authorization:'Bearer '+token}});
-  const role=roles.fields?.role?.stringValue||'';
-  if(role!=='admin'&&role!=='reader')throw Error('Tu usuario todavía no tiene permiso de biblioteca.');
+  checkLibraryRole_(user.localId,token);
   cache.put('auth_'+key,user.localId,120);
   return {uid:user.localId};
+}
+function checkLibraryRole_(uid,token){
+  const roleUrl='https://firestore.googleapis.com/v1/projects/'+FIREBASE_PROJECT_+
+    '/databases/(default)/documents/roles/'+encodeURIComponent(uid);
+  let roles;
+  try{roles=jsonRequest_(roleUrl,{headers:{Authorization:'Bearer '+token}})}
+  catch(error){
+    if(/\(401\)/.test(error.message))throw Error('La sesión de biblioteca venció. Reconectá para continuar.');
+    throw error;
+  }
+  const role=roles.fields?.role?.stringValue||'';
+  const status=roles.fields?.status?.stringValue||'active';
+  if(status==='blocked')throw Error('Tu acceso a Taller está bloqueado. Consultá al administrador.');
+  if(status==='deleted')throw Error('Tu acceso a Taller fue eliminado. Consultá al administrador.');
+  if(role!=='admin'&&role!=='reader')throw Error('Tu usuario todavía no tiene permiso de biblioteca.');
 }
 function driveApi_(relative,opt){
   const url='https://www.googleapis.com/drive/v3/'+relative;
@@ -204,4 +218,3 @@ function exportarDocumentoTexto(session,fileId){
   const text=response.getContentText();if(text.length>7*1024*1024)throw Error('El texto supera el tamaño admitido.');
   return text;
 }
-
