@@ -49,7 +49,7 @@ test('notes finish saving after leaving the screen without touching a missing st
 test('late PDF response does not overwrite a newer view',async()=>{
  const start=html.indexOf('async function openDriveFile(file,'),end=html.indexOf('\nfunction settings()',start);
  const screen={isConnected:true};let resolve,created=0,destroyed=0;
- const ctx={useServerLibrary:()=>true,driveListVersion:0,activeUser:{uid:'u'},clearPdfPreview(){},recordLibraryVisit(){},driveTrail:[],driveFileLink:()=>'',view:{innerHTML:''},folderHeader:()=>'',esc:x=>x,bindTrailButtons(){},document:{getElementById:()=>screen},driveRequest(){},window:{pdfjsLib:{PDFDataRangeTransport(){},GlobalWorkerOptions:{}}},createProgressivePdf:()=>({promise:new Promise(r=>resolve=r),destroy(){destroyed++}}),URL:{createObjectURL(){created++;return 'blob:test'}},Blob};
+ const ctx={useServerLibrary:()=>true,driveListVersion:0,activeUser:{uid:'u'},clearPdfPreview(){},recordLibraryVisit(){},driveTrail:[],driveFileLink:()=>'',view:{innerHTML:''},folderHeader:()=>'',esc:x=>x,bindTrailButtons(){},document:{getElementById:()=>screen},driveRequest(){},window:{pdfjsLib:{getDocument(){},GlobalWorkerOptions:{}}},createCompletePdf:()=>({promise:new Promise(r=>resolve=r),destroy(){destroyed++}}),URL:{createObjectURL(){created++;return 'blob:test'}},Blob};
  vm.createContext(ctx);vm.runInContext(html.slice(start,end),ctx);
  const result=ctx.openDriveFile({id:'test',name:'test.pdf',mimeType:'application/pdf'});screen.isConnected=false;ctx.driveListVersion++;
  ctx.view.innerHTML='newer view';resolve({numPages:5});await result;assert.equal(created,0);assert.equal(destroyed,1);assert.equal(ctx.view.innerHTML,'newer view');
@@ -78,3 +78,4 @@ test('common messages preserve failed drafts and save photos atomically apart fr
  fail=false;input.value='';await form.onsubmit({preventDefault(){}});
  assert.equal(writes.length,2);assert.equal(writes[0].data.photoCount,1);assert.equal(writes[0].data.text,'');assert(!('dataUrl' in writes[0].data));assert.equal(writes[1].ref,'commonMessages/id/photos/0');assert.equal(input.value,'');
 });
+

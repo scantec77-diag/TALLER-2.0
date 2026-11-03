@@ -44,8 +44,8 @@ function viewerContext(){
   const view=element();view.clientWidth=400;Object.defineProperty(view,'innerHTML',{set:parse});
   const pdf={numPages:10,async getPage(page){events.push('get:'+page);return {getViewport:({scale})=>({width:400*scale,height:600*scale}),render(){events.push('render:'+page);return {promise:Promise.resolve()}},getTextContent(){throw Error('Text search must not block initial preview')}}},getData(){throw Error('Full download must be explicit')}};
   const context={driveListVersion:0,activeUser:{uid:'reader'},clearPdfPreview(){},recordLibraryVisit(){},driveTrail:[],driveFileLink:()=>'',folderHeader:()=>'',esc:s=>s,
-    useServerLibrary:()=>true,bindTrailButtons(){},driveRequest(){},createProgressivePdf:()=>({promise:Promise.resolve(pdf),destroy(){}}),view,
-    window:{pdfjsLib:{PDFDataRangeTransport(){},GlobalWorkerOptions:{}},devicePixelRatio:1,IntersectionObserver:Observer,removeEventListener(){}},
+    useServerLibrary:()=>true,bindTrailButtons(){},driveRequest(){},createCompletePdf:()=>({promise:Promise.resolve(pdf),destroy(){}}),view,
+    window:{pdfjsLib:{getDocument(){},GlobalWorkerOptions:{}},devicePixelRatio:1,IntersectionObserver:Observer,removeEventListener(){}},
     document:{getElementById:id=>nodes.get(id),createElement:element},requestAnimationFrame:fn=>{events.push('paint');queueMicrotask(fn)},
     normalizeManualText:s=>s.toLowerCase(),setTimeout,URL,Blob,console};
   vm.createContext(context);
@@ -132,5 +132,6 @@ test('leaving a manual disconnects automatic loading and prevents new page reque
   intersect();await new Promise(setImmediate);
   assert.equal(events.filter(x=>x.startsWith('get:')).length,3);
 });
+
 
 

@@ -98,6 +98,32 @@ export async function libraryDriveResponse(request, input, options = {}) {
   const end = Math.min(size - 1, bounds?.[2] ? Number(bounds[2]) : size - 1);
   if (bounds && (start >= size || start > end)) return new Response(null, {status: 416, headers: {'Content-Range': 'bytes */' + size}});
   const chunks = []; let offset = start;
+  if (options.libraryCompletePdf && !range && size > 0) {
+    // Three bounded RPCs at a time; preserve file order even when responses race.
+    // Each RPC still checks the visitor and the file on the server.
+    const blockSize = 384 * 1024;
+    let next = 0, received = 0, failed = false;
+    const count = Math.ceil(size / blockSize);
+    const complete = new Array(count);
+    async function worker() {
+      while (!failed && next < count) {
+        if (options.signal?.aborted) throw new DOMException('Lectura cancelada.', 'AbortError');
+        const index = next++, start = index * blockSize;
+        const result = await request('bloqueArchivo', [id, start]);
+        if (options.signal?.aborted) throw new DOMException('Lectura cancelada.', 'AbortError');
+        const bytes = Uint8Array.from(atob(result.base64), c => c.charCodeAt(0));
+        const expected = Math.min(blockSize, size - start);
+        if (Number(result.size) !== size) throw Error('El archivo cambió. Volvé a abrir el manual.');
+        if (result.start !== start || result.length !== expected || bytes.length !== expected)
+          throw Error('La biblioteca devolvió un PDF incompleto.');
+        complete[index] = bytes; received += bytes.length;
+        options.libraryProgress?.({received, size});
+      }
+    }
+    try { await Promise.all(Array.from({length: Math.min(3, count)}, () => worker())); }
+    catch (error) { failed = true; throw error; }
+    return new Response(new Blob(complete), {headers: {'Content-Type': meta.mimeType || 'application/pdf', 'Content-Length': String(size)}});
+  }
   while (offset <= end) {
     if (options.signal?.aborted) throw new DOMException('Lectura cancelada.', 'AbortError');
     const result = await request('bloqueArchivo', [id, offset]);
@@ -112,4 +138,5 @@ export async function libraryDriveResponse(request, input, options = {}) {
   if (bounds) headers['Content-Range'] = 'bytes ' + start + '-' + end + '/' + size;
   return new Response(new Blob(chunks), {status: bounds ? 206 : 200, headers});
 }
+
 

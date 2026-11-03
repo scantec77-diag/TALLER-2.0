@@ -1,4 +1,31 @@
-// Adapt the authenticated Drive reader to PDF.js byte-range loading.
+// Default viewer: hand PDF.js a complete, authenticated download. No range transport.
+export function createCompletePdf({lib, file, request, onProgress = () => {}, onError = () => {}}) {
+  const controller = new AbortController();
+  let task, stopped = false, rejectFailure;
+  const failure = new Promise((_, reject) => { rejectFailure = reject; });
+  failure.catch(() => {});
+  function destroy() {
+    if (stopped) return;
+    stopped = true; controller.abort();
+    rejectFailure(new DOMException('Lectura cancelada.', 'AbortError'));
+    if (task) Promise.resolve(task.destroy()).catch(() => {});
+  }
+  const loading = (async () => {
+    const response = await request('https://www.googleapis.com/drive/v3/files/' + encodeURIComponent(file.id) + '?alt=media', {
+      signal: controller.signal, libraryCompletePdf: true, libraryProgress: onProgress
+    });
+    if (!response.ok) throw Error('No se pudo descargar el PDF (' + response.status + ').');
+    const data = new Uint8Array(await response.arrayBuffer());
+    if (stopped) throw new DOMException('Lectura cancelada.', 'AbortError');
+    if (!data.length) throw Error('El PDF llegó vacío.');
+    onProgress({received: data.length, size: data.length});
+    task = lib.getDocument({data, disableRange: true, disableStream: true, isEvalSupported: false});
+    return task.promise;
+  })().catch(error => { if (!stopped) { controller.abort(); onError(error); } throw error; });
+  return {promise: Promise.race([loading, failure]), destroy};
+}
+
+// Optional legacy range reader, retained for compatibility.
 // Never send shared credentials or a private download URL to the PDF worker.
 export function createProgressivePdf({lib, file, request, onProgress = () => {}, onError = () => {}}) {
   const controller = new AbortController();
@@ -75,5 +102,6 @@ export function createProgressivePdf({lib, file, request, onProgress = () => {},
   })();
   return {promise: Promise.race([loading, failure]), destroy: () => stop()};
 }
+
 
 
