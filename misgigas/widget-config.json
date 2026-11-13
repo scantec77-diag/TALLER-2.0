@@ -1,0 +1,33 @@
+{
+  "schema": 1,
+  "revision": 1,
+  "backgroundTop": "#565B60",
+  "backgroundBottom": "#454A4F",
+  "track": "#7A8187",
+  "text": "#FFFFFF",
+  "secondaryText": "#F0F2F4",
+  "bold": true,
+  "numberSize": 76,
+  "labelSize": 23,
+  "stops": [
+    {
+      "gb": 0,
+      "color": "#ED7777"
+    },
+    {
+      "gb": 10,
+      "color": "#FFAD59"
+    },
+    {
+      "gb": 20,
+      "color": "#F9DE70"
+    },
+    {
+      "gb": 40,
+      "color": "#83E5A0"
+    }
+  ],
+  "latestVersionCode": 8,
+  "latestVersionName": "0.8",
+  "downloadUrl": "https://github.com/scantec77-diag/TALLER-2.0/raw/refs/heads/misgigas-config/misgigas/MisGigas-latest.apk"
+}
