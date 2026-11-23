@@ -37,11 +37,20 @@ jobs:
       - name: Preparar archivos web
         shell: bash
         run: |
-          mkdir -p _site/assets
-          cp index.html firebase-config.js firebase-messaging-sw.js push-config.js push-notifications.js manual-content-search.js manual-ocr.js library-server.js progressive-pdf.js taller-ia.js taller-ia.css _site/
+          mkdir -p _site/assets _site/updates
+          BUILD_VERSION="main-${GITHUB_RUN_NUMBER}-${GITHUB_SHA:0:7}"
+          sed "s/__TALLER_BUILD_VERSION__/${BUILD_VERSION}/g" index.html > _site/index.html
+          sed "s/__TALLER_BUILD_VERSION__/${BUILD_VERSION}/g" firebase-messaging-sw.js > _site/firebase-messaging-sw.js
+          cp firebase-config.js push-config.js push-notifications.js app-updates.js manual-content-search.js manual-ocr.js library-server.js progressive-pdf.js taller-ia.js taller-ia.css _site/
+          cat > _site/updates/stable.json <<EOF
+          {"channel":"stable","version":"${BUILD_VERSION}","commit":"${GITHUB_SHA}","updatedAt":"$(date -u +%Y-%m-%dT%H:%M:%SZ)","url":"https://scantec77-diag.github.io/TALLER-2.0/"}
+          EOF
           cp -R assets/. _site/assets/
           touch _site/.nojekyll
           test -f _site/index.html
+          test -f _site/app-updates.js
+          test -f _site/updates/stable.json
+          ! grep -q '__TALLER_BUILD_VERSION__' _site/index.html
           test -f _site/progressive-pdf.js
           test -f _site/taller-ia.js
           test -f _site/taller-ia.css
