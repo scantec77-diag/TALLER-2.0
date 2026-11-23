@@ -4,12 +4,10 @@ const notice = document.getElementById('appUpdateNotice');
 const message = document.getElementById('appUpdateMessage');
 const applyButton = document.getElementById('applyAppUpdate');
 let registration = null;
-let updateAvailable = false;
 let applying = false;
 let lastCheck = 0;
 
 function showUpdate(version) {
-  updateAvailable = true;
   if (message) message.textContent = 'Hay una versión nueva de Taller (' + version + ') en el canal estable.';
   if (notice) notice.hidden = false;
 }
@@ -27,12 +25,14 @@ async function installOrApplyUpdate() {
     }
     if (registration?.waiting) {
       navigator.serviceWorker.addEventListener('controllerchange', () => location.reload(), {once: true});
+      setTimeout(() => location.reload(), 8000);
       registration.waiting.postMessage({type: 'SKIP_WAITING'});
       return;
     }
     await registration?.update().catch(() => {});
     if (registration?.waiting) {
       navigator.serviceWorker.addEventListener('controllerchange', () => location.reload(), {once: true});
+      setTimeout(() => location.reload(), 8000);
       registration.waiting.postMessage({type: 'SKIP_WAITING'});
       return;
     }
