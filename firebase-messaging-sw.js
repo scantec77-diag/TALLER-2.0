@@ -1,5 +1,5 @@
 /* Taller 2.0: push notifications plus a versioned app shell for in-app updates. */
-const TALLER_BUILD_VERSION = '__TALLER_BUILD_VERSION__';
+const TALLER_BUILD_VERSION = 'main-ffaa12b6f55ea727f197cbb0f3bcbf6d40a08076';
 const TALLER_CACHE_PREFIX = 'taller20-shell-';
 const TALLER_CACHE_NAME = TALLER_CACHE_PREFIX + TALLER_BUILD_VERSION;
 const TALLER_APP_SHELL = [
