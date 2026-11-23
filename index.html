@@ -300,9 +300,10 @@ async function changeUserAccess(uid,action){
   try{
     // Re-read immediately so stale cards cannot overwrite a newly promoted administrator.
     const roleRef=doc(db,'roles',uid),existing=await getDoc(roleRef);
-    if(existing.exists()&&existing.data().role==='admin')throw Error('Esta cuenta es administradora y está protegida.');
+    const existingRole=existing.exists()?existing.data().role:'';
+    if(existingRole==='admin')throw Error('Esta cuenta es administradora y está protegida.');
     if(activeUser?.uid!==currentAdmin||!isAdmin)return;
-    const role=action==='grantEditor'?'editor':action==='revokeEditor'||action==='approve'?'reader':existing.exists()&&['reader','editor'].includes(existing.data().role)?existing.data().role:'reader';
+    const role=action==='grantEditor'?'editor':action==='revokeEditor'||action==='approve'?'reader':['reader','editor'].includes(existingRole)?existingRole:'reader';
     await setDoc(roleRef,{role,status,updatedAt:serverTimestamp(),updatedBy:currentAdmin},{merge:true});
     const verified=await getDoc(roleRef);
     if(!verified.exists()||verified.data().status!==status||verified.data().role!==role)throw Error('No se pudo verificar el permiso reader.');
@@ -733,7 +734,8 @@ function home(){
  view.innerHTML='<button class="settings" onclick="notes()">📝 Mi espacio</button><button class="settings" onclick="commonSpace()">💬 ESPACIO COMUN</button><button class="settings" onclick="tallerIA()">🤖 Taller IA</button><button class="settings" onclick="manualContentSearch()">🔎 Buscar dentro de manuales</button><button class="settings" id="homeReconnect" type="button" onclick="reconnectManuals()">⟳ Reconectar</button><p id="homeReconnectStatus" role="status"></p><button class="settings" onclick="pushSettings()">🔔 Notificaciones</button>'+
   (isAdmin?'<div class="home-admin-actions"><button class="settings" onclick="manageFolders()">📁 Crear carpeta</button><button class="settings" onclick="settings()">⚙️ Configuración</button><button class="settings" onclick="manageConnection()">🔗 Gestionar conexión</button><button class="settings" onclick="accessDashboard()">👥 Accesos</button></div>':'')+
   '<h2>Carpetas</h2><p id="folderSyncStatus" role="status">Actualizando carpetas…</p><div class="grid" id="homeFolderGrid"></div>';
- paintHomeFolders();refreshHomeFolders(activeUser.uid);
+ if(typeof paintHomeFolders==='function')paintHomeFolders();
+ if(typeof refreshHomeFolders==='function')refreshHomeFolders(activeUser.uid);
 }
 async function manualContentSearch(){
  if(!activeUser)return;
