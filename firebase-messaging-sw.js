@@ -1,9 +1,60 @@
-/* Taller 2.0: mensajes push cuando la web/PWA compatible está en segundo plano.
-   Este service worker debe servirse en el mismo origen de index.html y sobre HTTPS. */
+/* Taller 2.0: push notifications plus a versioned app shell for in-app updates. */
+const TALLER_BUILD_VERSION = '__TALLER_BUILD_VERSION__';
+const TALLER_CACHE_PREFIX = 'taller20-shell-';
+const TALLER_CACHE_NAME = TALLER_CACHE_PREFIX + TALLER_BUILD_VERSION;
+const TALLER_APP_SHELL = [
+  new URL('./index.html', self.registration.scope).href,
+  new URL('./app-updates.js', self.registration.scope).href
+];
+
+self.addEventListener('install', event => {
+  event.waitUntil(caches.open(TALLER_CACHE_NAME).then(cache =>
+    Promise.allSettled(TALLER_APP_SHELL.map(url => cache.add(url)))
+  ));
+});
+
+self.addEventListener('activate', event => {
+  event.waitUntil((async () => {
+    const names = await caches.keys();
+    await Promise.all(names.filter(name => name.startsWith(TALLER_CACHE_PREFIX) && name !== TALLER_CACHE_NAME)
+      .map(name => caches.delete(name)));
+    await clients.claim();
+  })());
+});
+
+self.addEventListener('message', event => {
+  if (event.data?.type === 'SKIP_WAITING') self.skipWaiting();
+});
+
+self.addEventListener('fetch', event => {
+  const request = event.request;
+  if (request.method !== 'GET') return;
+  const url = new URL(request.url);
+  if (url.origin !== self.location.origin || url.pathname.endsWith('/updates/stable.json')) return;
+  event.respondWith((async () => {
+    try {
+      const response = await fetch(request);
+      if (response.ok) {
+        const cache = await caches.open(TALLER_CACHE_NAME);
+        await cache.put(request, response.clone());
+      }
+      return response;
+    } catch (_) {
+      const cached = await caches.match(request);
+      if (cached) return cached;
+      if (request.mode === 'navigate') {
+        const shell = await caches.match(new URL('./index.html', self.registration.scope).href);
+        if (shell) return shell;
+      }
+      return Response.error();
+    }
+  })());
+});
+
 importScripts('https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js');
 importScripts('https://www.gstatic.com/firebasejs/10.14.1/firebase-messaging-compat.js');
 firebase.initializeApp({
-  apiKey: 'AIzaSyCHFS8iMwgTdK_JGsxSTodblP6OJFahWbA',
+  apiKey: 'AIzaSyCHFS8iMwgTdK_KJsxSTodblP6OJFahWbA',
   authDomain: 'taller-2-0.firebaseapp.com',
   projectId: 'taller-2-0',
   storageBucket: 'taller-2-0.firebasestorage.app',
