@@ -51,6 +51,18 @@ function validSession_(session){
   checkLibraryRole_(identity.uid,identity.token);
   return identity.uid;
 }
+function requireAdminSession_(session){
+  validSession_(session);
+  const stored=CacheService.getScriptCache().get('library_'+session);
+  let identity;try{identity=JSON.parse(stored||'{}')}catch(_){identity={}}
+  if(!identity.uid||!identity.token)throw Error('La sesión de biblioteca venció. Volvé a ingresar.');
+  const roleUrl='https://firestore.googleapis.com/v1/projects/'+FIREBASE_PROJECT_+
+    '/databases/(default)/documents/roles/'+encodeURIComponent(identity.uid);
+  const role=jsonRequest_(roleUrl,{headers:{Authorization:'Bearer '+identity.token}});
+  if(role.fields?.role?.stringValue!=='admin'||(role.fields?.status?.stringValue||'active')!=='active')
+    throw Error('Solo el administrador puede crear carpetas.');
+  return identity;
+}
 function jsonRequest_(url,opt){
   const response=UrlFetchApp.fetch(url,Object.assign({muteHttpExceptions:true,followRedirects:true},opt||{}));
   const code=response.getResponseCode();
@@ -137,6 +149,32 @@ function listarCarpeta(session,folderId,pageToken){
   const d=JSON.parse(res.getContentText());
   return {files:(d.files||[]).map(f=>({id:f.id,name:f.name,mimeType:f.mimeType,size:Number(f.size)||0,webViewLink:f.webViewLink||''})),
           nextPageToken:d.nextPageToken||''};
+}
+function crearCarpeta(session,parentId,name){
+  requireAdminSession_(session);
+  const parent=String(parentId||'');
+  const folderName=String(name||'').trim();
+  if(folderName.length<1||folderName.length>120||/[\\/\u0000-\u001f]/.test(folderName))
+    throw Error('Usá un nombre de 1 a 120 caracteres, sin barras ni controles.');
+  allowedFile_(parent,true);
+  const q="'"+parent+"' in parents and trashed = false and mimeType = 'application/vnd.google-apps.folder'";
+  const query='files?'+[
+    'q='+encodeURIComponent(q),
+    'fields='+encodeURIComponent('files(id,name)'),
+    'pageSize=1000','supportsAllDrives=true','includeItemsFromAllDrives=true'
+  ].join('&');
+  const existing=driveApi_(query);
+  if(existing.getResponseCode()!==200)throw Error('No se pudo revisar la carpeta principal antes de crear.');
+  const folders=JSON.parse(existing.getContentText()).files||[];
+  if(folders.some(folder=>String(folder.name||'').trim().toLocaleLowerCase()===folderName.toLocaleLowerCase()))
+    throw Error('Ya existe una carpeta con ese nombre en la lista principal.');
+  const created=driveApi_('files?fields='+encodeURIComponent('id,name,mimeType,parents')+'&supportsAllDrives=true',{
+    method:'post',contentType:'application/json',
+    payload:JSON.stringify({name:folderName,mimeType:'application/vnd.google-apps.folder',parents:[parent]})
+  });
+  if(created.getResponseCode()<200||created.getResponseCode()>=300)
+    throw Error('Google Drive no pudo crear la carpeta ('+created.getResponseCode()+').');
+  return JSON.parse(created.getContentText());
 }
 function infoArchivo(session,fileId){
   validSession_(session);
