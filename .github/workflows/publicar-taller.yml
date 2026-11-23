@@ -38,7 +38,7 @@ jobs:
         shell: bash
         run: |
           mkdir -p _site/assets _site/updates
-          BUILD_VERSION="main-${GITHUB_RUN_NUMBER}-${GITHUB_SHA:0:7}"
+          BUILD_VERSION="main-${GITHUB_SHA}"
           sed "s/__TALLER_BUILD_VERSION__/${BUILD_VERSION}/g" index.html > _site/index.html
           sed "s/__TALLER_BUILD_VERSION__/${BUILD_VERSION}/g" firebase-messaging-sw.js > _site/firebase-messaging-sw.js
           cp firebase-config.js push-config.js push-notifications.js app-updates.js manual-content-search.js manual-ocr.js library-server.js progressive-pdf.js taller-ia.js taller-ia.css _site/
