@@ -10,7 +10,7 @@ on:
     - cron: '17 * * * *'
 
 permissions:
-  contents: read
+  contents: write
   pages: write
   id-token: write
 
@@ -39,7 +39,7 @@ jobs:
         run: |
           mkdir -p _site/assets _site/updates
           BUILD_VERSION="main-${GITHUB_SHA}"
-          sed "s/__TALLER_BUILD_VERSION__/${BUILD_VERSION}/g" index.html > _site/index.html
+          sed -E "s/data-app-version=\"[^\"]*\"/data-app-version=\"${BUILD_VERSION}\"/" index.html > _site/index.html
           sed "s/__TALLER_BUILD_VERSION__/${BUILD_VERSION}/g" firebase-messaging-sw.js > _site/firebase-messaging-sw.js
           cp firebase-config.js push-config.js push-notifications.js app-updates.js manual-content-search.js manual-ocr.js library-server.js progressive-pdf.js taller-ia.js taller-ia.css _site/
           cat > _site/updates/stable.json <<EOF
@@ -51,6 +51,7 @@ jobs:
           test -f _site/app-updates.js
           test -f _site/updates/stable.json
           ! grep -q '__TALLER_BUILD_VERSION__' _site/index.html
+          ! grep -q 'data-app-version="__TALLER_BUILD_VERSION__"' _site/index.html
           test -f _site/progressive-pdf.js
           test -f _site/taller-ia.js
           test -f _site/taller-ia.css
@@ -64,3 +65,22 @@ jobs:
       - name: Publicar sitio
         id: deployment
         uses: actions/deploy-pages@v4
+
+      # El sitio también está configurado para publicar la rama main. Dejar estos
+      # archivos renderizados en la rama mantiene visible el canal estable ahí.
+      - name: Sincronizar versión y canal con la rama publicada
+        shell: bash
+        run: |
+          cp _site/index.html index.html
+          cp _site/firebase-messaging-sw.js firebase-messaging-sw.js
+          mkdir -p updates
+          cp _site/updates/stable.json updates/stable.json
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add index.html firebase-messaging-sw.js updates/stable.json
+          if git diff --cached --quiet; then
+            echo "La rama ya contiene la versión estable actual."
+            exit 0
+          fi
+          git commit -m "chore: publicar canal estable [skip ci]"
+          git push
