@@ -60,7 +60,7 @@ function requireAdminSession_(session){
     '/databases/(default)/documents/roles/'+encodeURIComponent(identity.uid);
   const role=jsonRequest_(roleUrl,{headers:{Authorization:'Bearer '+identity.token}});
   if(role.fields?.role?.stringValue!=='admin'||(role.fields?.status?.stringValue||'active')!=='active')
-    throw Error('Solo el administrador puede crear carpetas.');
+    throw Error('Solo un administrador activo puede gestionar carpetas.');
   return identity;
 }
 function jsonRequest_(url,opt){
@@ -132,6 +132,83 @@ function allowedFile_(id,folderOnly){
   }
   throw Error('El archivo no pertenece a la biblioteca autorizada.');
 }
+function manageableRootFolder_(id){
+  const folder=meta_(String(id||''));
+  if(folder.id===LIBRARY_ROOT_)throw Error('La carpeta principal de la biblioteca no se puede modificar desde aquí.');
+  if(folder.mimeType!=='application/vnd.google-apps.folder')throw Error('El elemento seleccionado no es una carpeta.');
+  if(!(folder.parents||[]).includes(LIBRARY_ROOT_))
+    throw Error('Solo se pueden gestionar carpetas ubicadas directamente en la biblioteca principal.');
+  return folder;
+}
+function normalizedFolderName_(name){
+  const value=String(name||'').trim();
+  if(value.length<1||value.length>120||/[\\/\u0000-\u001f]/.test(value))
+    throw Error('Usá un nombre de 1 a 120 caracteres, sin barras ni controles.');
+  return value;
+}
+function rootFolderDuplicate_(name,exceptId){
+  const target=name.trim().toLocaleLowerCase('es');
+  let pageToken='',previousToken='';
+  do{
+    const q="'"+LIBRARY_ROOT_+"' in parents and trashed = false and mimeType = 'application/vnd.google-apps.folder'";
+    const params={
+      q:q,fields:'nextPageToken,files(id,name)',pageSize:1000,
+      supportsAllDrives:true,includeItemsFromAllDrives:true
+    };
+    if(pageToken)params.pageToken=pageToken;
+    const query=Object.keys(params).map(key=>encodeURIComponent(key)+'='+encodeURIComponent(params[key])).join('&');
+    const response=driveApi_('files?'+query);
+    if(response.getResponseCode()!==200)throwDriveError_(response,'revisar las carpetas existentes');
+    const data=JSON.parse(response.getContentText()),folders=data.files||[];
+    if(folders.some(folder=>folder.id!==exceptId&&String(folder.name||'').trim().toLocaleLowerCase('es')===target))return true;
+    previousToken=pageToken;pageToken=data.nextPageToken||'';
+    if(pageToken&&pageToken===previousToken)throw Error('Google Drive devolvió una página repetida. Volvé a intentar.');
+  }while(pageToken);
+  return false;
+}
+function throwDriveError_(response,operation){
+  const status=response.getResponseCode();
+  let data={};try{data=JSON.parse(response.getContentText())}catch(_){}
+  const detail=String(data.error?.message||'')+' '+response.getContentText();
+  if(status===403&&/ACCESS_TOKEN_SCOPE_INSUFFICIENT/i.test(detail))
+    throw Error('Falta autorizar al Apps Script el permiso de escritura de Google Drive. La operación no se realizó.');
+  if(status===403)throw Error('Google Drive denegó el permiso para '+operation+'. Revisá la cuenta ejecutora y el acceso a esta carpeta.');
+  throw Error('Google Drive no pudo '+operation+' ('+status+').');
+}
+// Ejecutar una sola vez desde el editor, bajo la cuenta que publica el web app.
+// Apps Script mostrará el consentimiento de Drive; la carpeta de prueba se manda a papelera.
+function autorizarEscrituraDrive(){
+  let temporary=null;
+  try{
+    const root=DriveApp.getFolderById(LIBRARY_ROOT_);
+    temporary=root.createFolder('PRUEBA TEMPORAL AUTORIZACION TALLER');
+    const id=temporary.getId(),name=temporary.getName();
+    temporary.setTrashed(true);
+    console.log('Autorización de Drive y escritura verificadas; carpeta temporal enviada a papelera: '+id);
+    return {ok:true,name:name,trashed:true};
+  }catch(error){
+    if(temporary){
+      try{temporary.setTrashed(true)}catch(cleanupError){
+        console.error('No se pudo mandar a papelera la carpeta temporal '+temporary.getId()+': '+cleanupError.message);
+      }
+    }
+    throw Error('No se pudo completar la prueba de autorización de Drive: '+(error?.message||error));
+  }
+}
+function listarCarpetasAdministrables(session,parentId,pageToken){
+  requireAdminSession_(session);
+  if(String(parentId||LIBRARY_ROOT_)!==LIBRARY_ROOT_)throw Error('La administración está limitada a la carpeta principal de la biblioteca.');
+  allowedFile_(LIBRARY_ROOT_,true);
+  const q="'"+LIBRARY_ROOT_+"' in parents and trashed = false and mimeType = 'application/vnd.google-apps.folder'";
+  const params={q:q,fields:'nextPageToken,files(id,name)',pageSize:1000,
+    orderBy:'name',supportsAllDrives:true,includeItemsFromAllDrives:true};
+  if(pageToken)params.pageToken=String(pageToken);
+  const query=Object.keys(params).map(key=>encodeURIComponent(key)+'='+encodeURIComponent(params[key])).join('&');
+  const response=driveApi_('files?'+query);
+  if(response.getResponseCode()!==200)throwDriveError_(response,'listar las carpetas');
+  const data=JSON.parse(response.getContentText());
+  return {files:(data.files||[]).map(folder=>({id:folder.id,name:folder.name})),nextPageToken:data.nextPageToken||''};
+}
 function listarCarpeta(session,folderId,pageToken){
   validSession_(session);
   allowedFile_(folderId,true);
@@ -152,29 +229,37 @@ function listarCarpeta(session,folderId,pageToken){
 }
 function crearCarpeta(session,parentId,name){
   requireAdminSession_(session);
-  const parent=String(parentId||'');
-  const folderName=String(name||'').trim();
-  if(folderName.length<1||folderName.length>120||/[\\/\u0000-\u001f]/.test(folderName))
-    throw Error('Usá un nombre de 1 a 120 caracteres, sin barras ni controles.');
-  allowedFile_(parent,true);
-  const q="'"+parent+"' in parents and trashed = false and mimeType = 'application/vnd.google-apps.folder'";
-  const query='files?'+[
-    'q='+encodeURIComponent(q),
-    'fields='+encodeURIComponent('files(id,name)'),
-    'pageSize=1000','supportsAllDrives=true','includeItemsFromAllDrives=true'
-  ].join('&');
-  const existing=driveApi_(query);
-  if(existing.getResponseCode()!==200)throw Error('No se pudo revisar la carpeta principal antes de crear.');
-  const folders=JSON.parse(existing.getContentText()).files||[];
-  if(folders.some(folder=>String(folder.name||'').trim().toLocaleLowerCase()===folderName.toLocaleLowerCase()))
-    throw Error('Ya existe una carpeta con ese nombre en la lista principal.');
+  const parent=String(parentId||LIBRARY_ROOT_);
+  if(parent!==LIBRARY_ROOT_)throw Error('Solo se pueden crear carpetas dentro de la biblioteca principal.');
+  const folderName=normalizedFolderName_(name);
+  allowedFile_(LIBRARY_ROOT_,true);
+  if(rootFolderDuplicate_(folderName,''))throw Error('Ya existe una carpeta con ese nombre en la lista principal.');
   const created=driveApi_('files?fields='+encodeURIComponent('id,name,mimeType,parents')+'&supportsAllDrives=true',{
     method:'post',contentType:'application/json',
     payload:JSON.stringify({name:folderName,mimeType:'application/vnd.google-apps.folder',parents:[parent]})
   });
-  if(created.getResponseCode()<200||created.getResponseCode()>=300)
-    throw Error('Google Drive no pudo crear la carpeta ('+created.getResponseCode()+').');
+  if(created.getResponseCode()<200||created.getResponseCode()>=300)throwDriveError_(created,'crear la carpeta');
   return JSON.parse(created.getContentText());
+}
+function renombrarCarpeta(session,folderId,name){
+  requireAdminSession_(session);
+  const folder=manageableRootFolder_(folderId),folderName=normalizedFolderName_(name);
+  if(rootFolderDuplicate_(folderName,folder.id))throw Error('Ya existe otra carpeta con ese nombre en la lista principal.');
+  const response=driveApi_('files/'+encodeURIComponent(folder.id)+'?supportsAllDrives=true&fields='+encodeURIComponent('id,name,mimeType,parents'),{
+    method:'patch',contentType:'application/json',payload:JSON.stringify({name:folderName})
+  });
+  if(response.getResponseCode()<200||response.getResponseCode()>=300)throwDriveError_(response,'renombrar la carpeta');
+  return JSON.parse(response.getContentText());
+}
+function eliminarCarpeta(session,folderId){
+  requireAdminSession_(session);
+  const folder=manageableRootFolder_(folderId);
+  const response=driveApi_('files/'+encodeURIComponent(folder.id)+'?supportsAllDrives=true&fields='+encodeURIComponent('id,name,trashed'),{
+    method:'patch',contentType:'application/json',payload:JSON.stringify({trashed:true})
+  });
+  if(response.getResponseCode()<200||response.getResponseCode()>=300)throwDriveError_(response,'mover la carpeta a la papelera');
+  const result=JSON.parse(response.getContentText());
+  return {id:result.id,name:result.name,trashed:result.trashed===true};
 }
 function infoArchivo(session,fileId){
   validSession_(session);
