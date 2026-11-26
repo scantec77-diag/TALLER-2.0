@@ -182,7 +182,7 @@ $('search').addEventListener('input',paintFiles);
 const bridgeMode=<?!= bridgeJson ?>,bridgeNonce=<?!= bridgeNonceJson ?>;
 if(bridgeMode){
   const origin='https://scantec77-diag.github.io',channel='taller-library-v1';
-  const methods=new Set(['listarCarpeta','infoArchivo','metadatosArchivo','consultarArchivos','bloqueArchivo','exportarDocumentoPDF','exportarDocumentoTexto','crearCarpeta']);
+  const methods=new Set(['listarCarpeta','infoArchivo','metadatosArchivo','consultarArchivos','bloqueArchivo','exportarDocumentoPDF','exportarDocumentoTexto','listarCarpetasAdministrables','crearCarpeta','renombrarCarpeta','eliminarCarpeta']);
   window.addEventListener('message',async event=>{
     const message=event.data;
     if(event.source!==window.top||event.origin!==origin||message?.channel!==channel||message.nonce!==bridgeNonce||message.type!=='request')return;

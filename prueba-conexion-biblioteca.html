@@ -26,9 +26,10 @@ import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.14.1/fireba
 import { getAuth, onAuthStateChanged, GoogleAuthProvider, signInWithPopup } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js';
 import { getFirestore, doc, getDoc } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js';
 import { firebaseConfig } from './firebase-config.js';
+import { LIBRARY_SERVICE_URL } from './library-service-config.js';
 const app=initializeApp(firebaseConfig),auth=getAuth(app),db=getFirestore(app);
 const status=document.getElementById('status'),login=document.getElementById('login'),open=document.getElementById('open'),deny=document.getElementById('deny');
-const scriptUrl='https://script.google.com/macros/s/AKfycbzPf-zrdvBwb6jxxTAmI6vdqQO8mkpJf1324NuIYFpBgwZS5kbHE1G2zdZDEihZPXUh/exec';
+const scriptUrl=LIBRARY_SERVICE_URL;
 login.onclick=async()=>{
  login.disabled=true;
  try{await signInWithPopup(auth,new GoogleAuthProvider())}
